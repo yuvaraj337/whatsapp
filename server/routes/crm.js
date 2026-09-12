@@ -252,8 +252,12 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
     const allowed = { PENDING: ['CONFIRMED','CANCELLED'], CONFIRMED: ['COMPLETED','CANCELLED'], COMPLETED: [], CANCELLED: [] };
     if (booking.status !== next && !allowed[booking.status]?.includes(next)) return bad(`Invalid booking transition: ${booking.status} → ${next}.`, 'INVALID_BOOKING_TRANSITION');
     if (next === 'CONFIRMED' && booking.property_id) {
-      const result = await inventoryUpdate(booking.property_id, 'BOOKED', 'Booking confirmed');
-      if (result.status !== 200 && result.status !== 409 && result.status !== 404) return result;
+      const prop = await propertyById(booking.property_id);
+      // Skip inventory update if property is already BOOKED or SOLD (at or past target status)
+      if (prop && prop.inventory_status !== 'BOOKED' && prop.inventory_status !== 'SOLD') {
+        const result = await inventoryUpdate(booking.property_id, 'BOOKED', 'Booking confirmed');
+        if (result.status !== 200 && result.status !== 409 && result.status !== 404) return result;
+      }
     }
     if (next === 'CANCELLED') { const property = await propertyById(booking.property_id); if (property?.inventory_status === 'BOOKED' || property?.inventory_status === 'RESERVED') { const result = await inventoryUpdate(booking.property_id, 'AVAILABLE', 'Booking cancelled'); if (result.status !== 200) return result; } }
     const update = { status: next, updated_at: new Date().toISOString() }; if (next === 'CONFIRMED') { update.confirmed_at = new Date().toISOString(); update.booked_at = new Date().toISOString(); } if (next === 'CANCELLED') update.cancelled_at = new Date().toISOString(); if (body.notes !== undefined) update.notes = clean(body.notes) || null;
