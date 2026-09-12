@@ -6,7 +6,7 @@
 @import './openPlotsListing.css';
 
 /* ==========================================================================
-   VR REAL ESTATES - MASTER STYLESHEET
+   Real Estate Brothers group - MASTER STYLESHEET
    Accurately matching the luxury editorial visual reference screenshots
    ========================================================================== */
 
@@ -264,13 +264,15 @@ textarea {
 .ref-brand-block {
   display: flex;
   align-items: center;
+  gap: 12px;
   text-decoration: none;
   flex-shrink: 0;
 }
 
 .ref-brand-logo-img {
-  height: 48px;
-  width: auto;
+  height: 52px;
+  width: 52px;
+  border-radius: 50%;
   object-fit: contain;
   display: block;
 }
@@ -1913,8 +1915,10 @@ textarea {
 }
 
 .footer-brand-logo {
-  height: 48px;
-  width: auto;
+  height: 56px;
+  width: 56px;
+  border-radius: 50%;
+  object-fit: contain;
 }
 
 .footer-brand-heading {

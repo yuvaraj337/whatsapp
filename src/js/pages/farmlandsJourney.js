@@ -668,7 +668,7 @@ function renderScreenEnquiry(farm) {
 
               <label class="farmlands-checkbox-wrap">
                 <input type="checkbox" id="farm-enq-consent" checked required />
-                <span>I agree to be contacted by VR Real Estates.</span>
+                <span>I agree to be contacted by Real Estate Brothers group.</span>
               </label>
 
               <button type="submit" class="farmlands-btn-primary">

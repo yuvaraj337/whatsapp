@@ -191,10 +191,10 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       if (conv) {
         try {
           const customerName = visit.leads?.name || 'Valued Customer';
-          const projectName = visit.properties?.title || visit.properties?.property_code || 'VR Real Estate Property';
+          const projectName = visit.properties?.title || visit.properties?.property_code || 'Real Estate Brothers group Property';
           const scheduleText = dateLabel(scheduledAt);
           const messageText =
-            `*VR REAL ESTATE – SITE VISIT CONFIRMED* ✅\n\n` +
+            `*Real Estate Brothers group – SITE VISIT CONFIRMED* ✅\n\n` +
             `Hello ${customerName},\n\n` +
             `Great news! Your site visit for *${projectName}* has been *CONFIRMED* by our team.\n\n` +
             `📍 *Project / Unit:* ${projectName}\n` +
@@ -202,7 +202,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
             `Our site coordinator will be present at the site to guide you through the venture. If free pickup was requested, our driver will contact you beforehand.\n\n` +
             `Need any assistance? Reply directly to this WhatsApp message.\n\n` +
             `Best regards,\n` +
-            `*VR Real Estate Team*`;
+            `*Real Estate Brothers group Team*`;
           await writeOutbound(conv, messageText);
         } catch (e) {
           console.warn('[crm] site-visit WhatsApp send warning:', e?.message || e);
@@ -291,7 +291,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         if (lead?.phone) {
           const conv = await getOrCreateConversation(lead.id, lead.phone);
           const customerName = lead.name || 'Valued Customer';
-          const projectName = property?.title || property?.projects?.name || 'VR Real Estate Property';
+          const projectName = property?.title || property?.projects?.name || 'Real Estate Brothers group Property';
           let scheduleText = linkedVisit?.scheduled_at ? dateLabel(linkedVisit.scheduled_at) : 'as requested';
           if ((!linkedVisit?.scheduled_at || scheduleText === 'the requested time') && booking.notes) {
             const m = booking.notes.match(/on\s+([^(]+)(?:\(([^)]+)\))?/i);
@@ -299,7 +299,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
           }
 
           const messageText =
-            `*VR REAL ESTATE – SITE VISIT CONFIRMED* ✅\n\n` +
+            `*Real Estate Brothers group – SITE VISIT CONFIRMED* ✅\n\n` +
             `Hello ${customerName},\n\n` +
             `Great news! Your site visit for *${projectName}* has been *CONFIRMED* by our team.\n\n` +
             `📍 *Project / Unit:* ${projectName} (${property?.property_code || 'Unit'})\n` +
@@ -308,7 +308,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
             `Our site coordinator will be present at the site to guide you through the venture. If free pickup was requested, our driver will contact you beforehand.\n\n` +
             `Need any assistance? Reply directly to this WhatsApp message.\n\n` +
             `Best regards,\n` +
-            `*VR Real Estate Team*`;
+            `*Real Estate Brothers group Team*`;
 
           if (conv) {
             await writeOutbound(conv, messageText);

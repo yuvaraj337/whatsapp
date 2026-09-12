@@ -24,18 +24,18 @@ export function renderHeader(options = {}) {
   } else {
     rightNavElement = `
       <div class="header-contact-meta">
-        <a href="tel:+919876543210" class="header-meta-link" title="Call VR Real Estates">
+        <a href="tel:+919876543210" class="header-meta-link" title="Call Real Estate Brothers group">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
           </svg>
           <span>+91 98765 43210</span>
         </a>
-        <a href="mailto:info@vrrealestates.com" class="header-meta-link" title="Email VR Real Estates">
+        <a href="mailto:info@realestatebrothersgroup.com" class="header-meta-link" title="Email Real Estate Brothers group">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect width="20" height="16" x="2" y="4" rx="2"></rect>
             <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
           </svg>
-          <span>info@vrrealestates.com</span>
+          <span>info@realestatebrothersgroup.com</span>
         </a>
       </div>
       <button class="header-enquire-btn" onclick="window.openGeneralEnquiry ? window.openGeneralEnquiry() : (window.openSiteVisitModal ? window.openSiteVisitModal('VR Header') : null)">
@@ -48,8 +48,12 @@ export function renderHeader(options = {}) {
     <header class="ref-header" id="main-header">
       <div class="ref-header-inner">
         <!-- Brand Logo Area -->
-        <a href="#/" class="ref-brand-block" title="VR REAL ESTATES">
-          <img src="/images/vr-logo.png" alt="VR REAL ESTATES" class="ref-brand-logo-img" />
+        <a href="#/" class="ref-brand-block" title="Real Estate Brothers group">
+          <img src="/images/vr-logo.png" alt="Real Estate Brothers group" class="ref-brand-logo-img" />
+          <div class="ref-brand-text">
+            <span class="ref-brand-title">Real Estate Brothers group</span>
+            <span class="ref-brand-subtitle">LAND TODAY &bull; A BRIGHTER TOMORROW</span>
+          </div>
         </a>
 
         <!-- Desktop Navigation Links -->
@@ -111,7 +115,7 @@ export function renderHeader(options = {}) {
         <a href="#/contact" class="ref-mobile-link">Contact</a>
         <div class="ref-mobile-contact">
           <a href="tel:+919490634829" class="mobile-contact-item">📞 +91 94906 34829</a>
-          <a href="mailto:info@vrrealestates.com" class="mobile-contact-item">✉️ info@vrrealestates.com</a>
+          <a href="mailto:info@realestatebrothersgroup.com" class="mobile-contact-item">✉️ info@realestatebrothersgroup.com</a>
         </div>
       </div>
     </header>

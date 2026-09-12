@@ -1,4 +1,4 @@
-// Project Detail Data for VR Real Estates
+// Project Detail Data for Real Estate Brothers group
 export const projectDetailsData = {
   'vr-green-meadows': {
     id: 'vr-green-meadows',

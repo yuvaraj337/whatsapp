@@ -23,7 +23,7 @@ export function showToast(message) {
 
 export function openSiteVisitModal(propertyTitle = 'Property') {
   if (typeof window.openSiteVisitFlow === 'function') {
-    if (propertyTitle && propertyTitle !== 'Property' && propertyTitle !== 'VR Real Estate' && propertyTitle !== 'Site Visit Consultation' && propertyTitle !== 'Site Visit Request' && propertyTitle !== 'Mobile Site Visit' && propertyTitle !== 'Mobile CTA' && propertyTitle !== 'Final CTA' && propertyTitle !== 'VR Header') {
+    if (propertyTitle && propertyTitle !== 'Property' && propertyTitle !== 'Real Estate Brothers group' && propertyTitle !== 'Site Visit Consultation' && propertyTitle !== 'Site Visit Request' && propertyTitle !== 'Mobile Site Visit' && propertyTitle !== 'Mobile CTA' && propertyTitle !== 'Final CTA' && propertyTitle !== 'VR Header') {
       window.openSiteVisitFlow({
         projectName: propertyTitle,
         unitName: 'Site Visit Consultation',

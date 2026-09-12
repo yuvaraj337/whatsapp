@@ -180,7 +180,7 @@ export function renderScreen2Form(customProp = null) {
           <div class="sv-prev-content">
             <img src="${prop.thumb || prop.image || '/images/journey/gallery_entrance.jpg'}" alt="${prop.projectName || 'Property'}" class="sv-prev-thumb" />
             <div class="sv-prev-info">
-              <div class="sv-prev-name">${prop.projectName || 'VR Real Estates'}</div>
+              <div class="sv-prev-name">${prop.projectName || 'Real Estate Brothers group'}</div>
               <div class="sv-prev-unit">${prop.unitName || 'Selected Unit'}</div>
               <div class="sv-prev-loc">${prop.location || 'Hyderabad'}</div>
               ${prop.price ? `<div class="sv-prev-price">${prop.price}</div>` : ''}
@@ -445,7 +445,7 @@ export function renderScreen3Success(submissionData) {
         <p class="sv-success-msg">
           ${submissionData.whatsappSent
             ? `Thank you, <strong>${submissionData.customerName || 'Valued Buyer'}</strong>!<br/>Your site visit request has been confirmed. <strong>A confirmation message has been sent to your WhatsApp number.</strong>`
-            : `Thank you, <strong>${submissionData.customerName || 'Valued Buyer'}</strong>!<br/>Your site visit request for <strong>${submissionData.projectName || 'VR Real Estates'}</strong> has been received.<br/>Our management team will review your preferred date/time and <strong>you will receive a WhatsApp confirmation</strong> at <strong>${submissionData.customerMobile}</strong> once confirmed.`}
+            : `Thank you, <strong>${submissionData.customerName || 'Valued Buyer'}</strong>!<br/>Your site visit request for <strong>${submissionData.projectName || 'Real Estate Brothers group'}</strong> has been received.<br/>Our management team will review your preferred date/time and <strong>you will receive a WhatsApp confirmation</strong> at <strong>${submissionData.customerMobile}</strong> once confirmed.`}
         </p>
         ${submissionData.bookingReference ? `<div style="margin: -10px 0 15px 0; font-size: 13px; color: #64748b; font-weight: 500;">Booking Reference: <strong>${submissionData.bookingReference}</strong></div>` : ''}
 
@@ -550,7 +550,7 @@ export function renderEnquiryForm(context = null) {
           <div class="sv-prev-content">
             <img src="${context.thumb || context.image || '/images/journey/gallery_entrance.jpg'}" alt="${context.projectName || 'Property'}" class="sv-prev-thumb" />
             <div class="sv-prev-info">
-              <div class="sv-prev-name">${context.projectName || 'VR Real Estates'}</div>
+              <div class="sv-prev-name">${context.projectName || 'Real Estate Brothers group'}</div>
               <div class="sv-prev-unit">${context.unitName || 'Unit Selection'}</div>
               <div class="sv-prev-loc">${context.location || 'Hyderabad'}</div>
               ${context.price ? `<div class="sv-prev-price">${context.price}</div>` : ''}

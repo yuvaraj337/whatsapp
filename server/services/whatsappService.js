@@ -183,7 +183,7 @@ export async function sendBookingConfirmationToCustomer({ phone, name, projectNa
   const lang = process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en_US';
 
   const customerName = name || 'Customer';
-  const project = projectName || 'VR Real Estate Property';
+  const project = projectName || 'Real Estate Brothers group Property';
   const visitDate = date || 'Preferred date';
   const visitTime = time || 'Scheduled time';
 
@@ -211,7 +211,7 @@ export async function sendBookingConfirmationToCustomer({ phone, name, projectNa
 
   // Plain text confirmation
   const messageBody =
-    `*VR REAL ESTATE – BOOKING CONFIRMATION*\n\n` +
+    `*Real Estate Brothers group – BOOKING CONFIRMATION*\n\n` +
     `Hello ${customerName},\n\n` +
     `Your site visit / booking request has been received successfully!\n\n` +
     `📍 *Project / Property:* ${project}\n` +
@@ -219,7 +219,7 @@ export async function sendBookingConfirmationToCustomer({ phone, name, projectNa
     `⏰ *Preferred Time:* ${visitTime}\n\n` +
     `Our team will contact you shortly to confirm your visit.\n\n` +
     `Thank you,\n` +
-    `*VR Real Estate Team*`;
+    `*Real Estate Brothers group Team*`;
 
   return sendWhatsAppMessage(phone, messageBody);
 }
@@ -253,7 +253,7 @@ export async function sendBookingNotificationToOwner({
   }
 
   const messageBody =
-    `*VR REAL ESTATE – NEW WEBSITE BOOKING* 🔔\n\n` +
+    `*Real Estate Brothers group – NEW WEBSITE BOOKING* 🔔\n\n` +
     `A new site visit / booking has been requested on the website.\n\n` +
     `👤 *Customer:* ${customerName || 'N/A'}\n` +
     `📱 *Phone:* ${customerPhone}\n` +

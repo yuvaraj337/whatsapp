@@ -8,15 +8,15 @@ export function renderFooter() {
           <!-- Column 1: Brand Info & Socials -->
           <div class="ref-footer-col brand-col">
             <a href="#/" class="footer-brand-wrap">
-              <img src="/images/vr-logo.png" alt="VR Real Estates" class="footer-brand-logo" onerror="this.style.display='none'" />
+              <img src="/images/vr-logo.png" alt="Real Estate Brothers group" class="footer-brand-logo" onerror="this.style.display='none'" />
               <div class="footer-brand-heading">
-                <span class="brand-title">VR REAL ESTATES</span>
+                <span class="brand-title">Real Estate Brothers group</span>
                 <span class="brand-sub">LAND TODAY &bull; A BRIGHTER TOMORROW</span>
               </div>
             </a>
             
             <p class="footer-brand-desc">
-              At VR Real Estates, we believe property is more than just land or a home &mdash; it's the foundation for a brighter tomorrow. We bring you verified properties, expert guidance and complete support, helping you make confident real estate decisions.
+              At Real Estate Brothers group, we believe property is more than just land or a home &mdash; it's the foundation for a brighter tomorrow. We bring you verified properties, expert guidance and complete support, helping you make confident real estate decisions.
             </p>
 
             <div class="footer-social-icons">
@@ -83,7 +83,7 @@ export function renderFooter() {
               <div class="contact-line">
                 <svg class="contact-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C59B3F" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
                 <div class="contact-text">
-                  <strong>VR Real Estates</strong><br/>
+                  <strong>Real Estate Brothers group</strong><br/>
                   <span>Tirupati, Andhra Pradesh - 517501<br/>India</span>
                 </div>
               </div>
@@ -98,7 +98,7 @@ export function renderFooter() {
               <div class="contact-line">
                 <svg class="contact-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C59B3F" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
                 <div class="contact-text">
-                  <a href="mailto:info@vrrealestates.com">info@vrrealestates.com</a>
+                  <a href="mailto:info@realestatebrothersgroup.com">info@realestatebrothersgroup.com</a>
                 </div>
               </div>
 
@@ -177,7 +177,7 @@ export function renderFooter() {
         <!-- Copyright & Bottom Handwritten Script -->
         <div class="ref-footer-bottom-bar">
           <div class="footer-copyright">
-            &copy; 2026 VR Real Estates. All rights reserved.
+            &copy; 2026 Real Estate Brothers group. All rights reserved.
           </div>
 
           <div class="footer-bottom-right">

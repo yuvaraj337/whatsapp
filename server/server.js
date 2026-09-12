@@ -614,7 +614,7 @@ if (executedFile === currentFile) {
 
   server.listen(PORT, () => {
     console.log(
-      `VR Real Estate API listening on http://localhost:${PORT}`
+      `Real Estate Brothers group API listening on http://localhost:${PORT}`
     );
 
     if (

@@ -185,7 +185,7 @@ export function renderFindProperty() {
             <div class="ref-find-card-wrapper">
               <img 
                 src="/images/ref/find-prop-exact-card.png" 
-                alt="VR Real Estates - More than Properties We Build Better Lives" 
+                alt="Real Estate Brothers group - More than Properties We Build Better Lives" 
                 class="ref-find-card-img" 
               />
             </div>

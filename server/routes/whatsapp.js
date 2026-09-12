@@ -201,7 +201,7 @@ export async function handleWhatsApp(req, pathParts, searchParams, body = {}) {
             const result = await answerAssistant({ message: text, conversation: history });
             const reply = result.status === 200
               ? result.data.reply
-              : 'Thanks for reaching out to VR Real Estates. Our team will get back to you shortly.';
+              : 'Thanks for reaching out to Real Estate Brothers group. Our team will get back to you shortly.';
 
             console.log(`[whatsapp] sending reply to ${phone}: "${reply}"`);
             const raw = await graphSendText(phone, reply);

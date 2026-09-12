@@ -1,4 +1,4 @@
-# VR Real Estate — Integrated Website + CRM + AI + WhatsApp
+# Real Estate Brothers group — Integrated Website + CRM + AI + WhatsApp
 
 This build keeps the existing website UI/UX intact and connects the existing Supabase-backed CRM, AI assistant, and WhatsApp Cloud API integration through the same backend. n8n is not required for the production WhatsApp flow.
 

@@ -98,7 +98,7 @@ export const api = {
   },
 
   /**
-   * Send a question to the VR Real Estate AI Assistant.
+   * Send a question to the Real Estate Brothers group AI Assistant.
    */
   askAssistant(message, conversation = []) {
     return request('/assistant', {

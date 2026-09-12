@@ -86,15 +86,15 @@ export function initAiAssistant() {
   root.id = 'vr-ai-assistant';
 
   root.innerHTML = `
-    <button class="vr-ai-launcher" type="button" aria-label="Open VR Real Estate AI Assistant" aria-expanded="false" aria-controls="vr-ai-panel">
+    <button class="vr-ai-launcher" type="button" aria-label="Open Real Estate Brothers group AI Assistant" aria-expanded="false" aria-controls="vr-ai-panel">
       <span class="vr-ai-launcher-icon" aria-hidden="true">✦</span>
       <span class="vr-ai-launcher-label">Ask AI</span>
     </button>
 
-    <section class="vr-ai-panel" id="vr-ai-panel" hidden aria-label="VR Real Estate AI Assistant">
+    <section class="vr-ai-panel" id="vr-ai-panel" hidden aria-label="Real Estate Brothers group AI Assistant">
       <header class="vr-ai-header">
         <div>
-          <p class="vr-ai-eyebrow">VR REAL ESTATES</p>
+          <p class="vr-ai-eyebrow">Real Estate Brothers group</p>
           <h2>AI Assistant</h2>
         </div>
         <button class="vr-ai-close" type="button" aria-label="Close AI Assistant">&times;</button>
@@ -102,7 +102,7 @@ export function initAiAssistant() {
 
       <div class="vr-ai-messages" id="vr-ai-messages" role="list" aria-live="polite">
         <div class="vr-ai-message vr-ai-message--assistant" role="listitem">
-          Hello! I can help you explore VR Real Estate projects, plots, amenities and property details.
+          Hello! I can help you explore Real Estate Brothers group projects, plots, amenities and property details.
         </div>
       </div>
 
@@ -141,7 +141,7 @@ export function initAiAssistant() {
     } else if (typeof window.openSiteVisitFlow === 'function') {
       window.openSiteVisitFlow({ isManual: true }, 'form');
     } else if (typeof window.openSiteVisitModal === 'function') {
-      window.openSiteVisitModal('VR Real Estate');
+      window.openSiteVisitModal('Real Estate Brothers group');
     }
   });
 
@@ -183,7 +183,7 @@ export function initAiAssistant() {
       renderMessage(
         messages,
         'assistant',
-        error?.message || 'The assistant is temporarily unavailable. Please try again or contact VR Real Estate.'
+        error?.message || 'The assistant is temporarily unavailable. Please try again or contact Real Estate Brothers group.'
       );
     } finally {
       send.disabled = false;

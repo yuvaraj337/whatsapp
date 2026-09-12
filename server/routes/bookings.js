@@ -140,7 +140,7 @@ export async function handleBookings(req, pathParts, body = {}) {
     body.unitName ||
     body.project ||
     body.property ||
-    'VR Real Estate Property'
+    'Real Estate Brothers group Property'
   );
   const notes = cleanStr(body.message || body.notes || body.pickup || '');
 

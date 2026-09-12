@@ -1,4 +1,4 @@
-// Reusable Project Detail Page Engine for VR Real Estates
+// Reusable Project Detail Page Engine for Real Estate Brothers group
 import { projectDetailsData } from '../data/projectDetails.js';
 import { renderHeader } from '../components/header.js';
 import { renderFooter } from '../components/footer.js';

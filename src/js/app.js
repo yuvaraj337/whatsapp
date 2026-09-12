@@ -104,7 +104,7 @@ function router() {
       `${guideName} BUYER GUIDE`,
       'Complete legal, connectivity, and development insights.',
       `
-        <p style="margin-bottom: 20px;">Welcome to the official <strong>${guideName} Buyer Guide</strong> by VR Real Estates. When investing in real estate, thorough due diligence and on-ground analysis are paramount.</p>
+        <p style="margin-bottom: 20px;">Welcome to the official <strong>${guideName} Buyer Guide</strong> by Real Estate Brothers group. When investing in real estate, thorough due diligence and on-ground analysis are paramount.</p>
         <div style="background: #f0f7ff; border-left: 4px solid #0e4b9e; padding: 20px; border-radius: 8px; margin-bottom: 24px;">
           <h4 style="color: #0e4b9e; margin-bottom: 8px;">Key Verification Steps:</h4>
           <ul>
