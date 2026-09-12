@@ -68,6 +68,21 @@ function isLocalOrigin(origin) {
   }
 }
 
+function isVercelOrigin(origin) {
+  try {
+    const parsed = new URL(origin);
+    const host = parsed.hostname.toLowerCase();
+    return (
+      parsed.protocol === 'https:' &&
+      (host.endsWith('.vercel.app') ||
+        host.endsWith('.vercel.sh'))
+    );
+  } catch {
+    return false;
+  }
+}
+
+
 function corsOrigin(requestOrigin) {
   if (!requestOrigin) return '';
 
@@ -87,7 +102,8 @@ function corsOrigin(requestOrigin) {
 
   if (
     allowed.has(requestOrigin) ||
-    isLocalOrigin(requestOrigin)
+    isLocalOrigin(requestOrigin) ||
+    isVercelOrigin(requestOrigin)
   ) {
     return requestOrigin;
   }
