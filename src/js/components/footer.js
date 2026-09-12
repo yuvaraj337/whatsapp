@@ -190,6 +190,18 @@ export function renderFooter() {
       </div>
     </footer>
 
+    <!-- Mobile Sticky Bottom CTA Bar -->
+    <div class="ref-mobile-bottom-bar" id="ref-mobile-bottom-bar">
+      <button type="button" class="ref-mbb-btn enquire" onclick="window.openGeneralEnquiry ? window.openGeneralEnquiry() : (window.openSiteVisitModal ? window.openSiteVisitModal('Mobile CTA') : null)">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+        <span>Enquire Now</span>
+      </button>
+      <button type="button" class="ref-mbb-btn visit" onclick="window.openSiteVisitFlow ? window.openSiteVisitFlow() : (window.openSiteVisitModal ? window.openSiteVisitModal('Mobile Site Visit') : null)">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span>Book Site Visit</span>
+      </button>
+    </div>
+
     <!-- Floating WhatsApp Button -->
     <a href="https://wa.me/919876543210?text=Hi%20VR%20Real%20Estates,%20I%20am%20interested%20in%20exploring%20properties." target="_blank" rel="noopener" class="ref-floating-whatsapp" id="ref-floating-whatsapp" title="Chat on WhatsApp">
       <svg width="28" height="28" viewBox="0 0 24 24" fill="white">

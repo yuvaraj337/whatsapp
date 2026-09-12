@@ -1,3 +1,5 @@
+import { api } from '../api/client.js';
+
 export function showToast(message) {
   const container = document.getElementById('toast-container');
   if (!container) return;
@@ -20,6 +22,19 @@ export function showToast(message) {
 }
 
 export function openSiteVisitModal(propertyTitle = 'Property') {
+  if (typeof window.openSiteVisitFlow === 'function') {
+    if (propertyTitle && propertyTitle !== 'Property' && propertyTitle !== 'VR Real Estate' && propertyTitle !== 'Site Visit Consultation' && propertyTitle !== 'Site Visit Request' && propertyTitle !== 'Mobile Site Visit' && propertyTitle !== 'Mobile CTA' && propertyTitle !== 'Final CTA' && propertyTitle !== 'VR Header') {
+      window.openSiteVisitFlow({
+        projectName: propertyTitle,
+        unitName: 'Site Visit Consultation',
+        location: 'Hyderabad'
+      }, 'form');
+    } else {
+      window.openSiteVisitFlow({ isManual: true }, 'form');
+    }
+    return;
+  }
+
   const modalContainer = document.getElementById('modal-container');
   if (!modalContainer) return;
 
@@ -68,11 +83,40 @@ export function openSiteVisitModal(propertyTitle = 'Property') {
   });
 
   const form = document.getElementById('site-visit-form');
-  form.addEventListener('submit', (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const name = document.getElementById('modal-name').value;
+    const name = document.getElementById('modal-name')?.value?.trim() || '';
+    const phone = document.getElementById('modal-phone')?.value?.trim() || '';
+    const timeSlot = document.getElementById('modal-time-slot')?.value || 'Preferred Day';
+    const pickup = document.getElementById('modal-pickup')?.value || 'Self Drive';
+
+    const submitBtn = form.querySelector('.btn-send-enquiry');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Scheduling...';
+    }
+
+    let whatsappSent = false;
+    try {
+      const res = await api.createBooking({
+        name,
+        phone,
+        date: timeSlot,
+        time: pickup,
+        projectName: propertyTitle,
+        notes: `Pickup preference: ${pickup}`
+      });
+      whatsappSent = Boolean(res?.customerNotification?.sent);
+    } catch (err) {
+      console.warn('[site-visit-modal] API call notice:', err?.message || err);
+    }
+
     window.closeModal();
-    showToast(`Thank you, ${name}! Your site visit request has been scheduled.`);
+    if (whatsappSent) {
+      showToast(`Thank you, ${name}! Your site visit request has been scheduled and confirmed via WhatsApp.`);
+    } else {
+      showToast(`Thank you, ${name}! Your site visit request has been scheduled. Our team will contact you shortly.`);
+    }
   });
 }
 

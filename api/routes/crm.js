@@ -29,6 +29,24 @@ async function writeOutbound(conversation, body) {
   await supabaseAdminPost('whatsapp_messages', { conversation_id: conversation.id, direction: 'outbound', message_type: 'text', body, raw_payload: raw });
   await supabaseAdminPatch('whatsapp_conversations', { id: `eq.${conversation.id}` }, { last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() });
 }
+async function getOrCreateConversation(leadId, phone) {
+  if (!phone) return null;
+  const digits = String(phone).replace(/\D/g, '');
+  const normalized = digits.length === 10 ? `91${digits}` : digits;
+  const existing = await supabaseAdminGet('whatsapp_conversations', {
+    select: 'id,phone,status,ai_enabled',
+    phone: `eq.${normalized}`,
+    limit: '1'
+  }).catch(() => []);
+  if (existing[0]) return existing[0];
+  const newConvs = await supabaseAdminPost('whatsapp_conversations', {
+    phone: normalized,
+    lead_id: leadId || null,
+    status: 'open',
+    ai_enabled: true
+  }).catch(() => []);
+  return newConvs[0] || null;
+}
 async function leadById(id) {
   const rows = await supabaseAdminGet('leads', { select: 'id,name,phone,email,source,status,notes,created_at,updated_at', id: `eq.${id}`, limit: '1' });
   return rows[0] || null;
@@ -44,7 +62,12 @@ async function inventoryUpdate(id, next, reason = '') {
   if (!property) return { status: 404, error: { code: 'PROPERTY_NOT_FOUND', message: 'Property not found.' } };
   const current = property.inventory_status;
   if (current === next) return { status: 200, data: { property } };
-  const allowed = { AVAILABLE: ['RESERVED'], RESERVED: ['AVAILABLE', 'BOOKED'], BOOKED: ['AVAILABLE', 'SOLD'], SOLD: [] };
+  const allowed = {
+    AVAILABLE: ['RESERVED', 'BOOKED'],
+    RESERVED: ['AVAILABLE', 'BOOKED'],
+    BOOKED: ['AVAILABLE', 'RESERVED', 'SOLD'],
+    SOLD: ['AVAILABLE']
+  };
   if (!allowed[current]?.includes(next)) return bad(`Invalid inventory transition: ${current} → ${next}.`, 'INVALID_INVENTORY_TRANSITION');
   const rows = await supabaseAdminPatch('properties', { id: `eq.${id}`, inventory_status: `eq.${current}` }, { inventory_status: next, updated_at: new Date().toISOString() });
   if (!rows[0]) return { status: 409, error: { code: 'INVENTORY_CHANGED', message: 'Inventory changed before this action completed. Refresh and try again.' } };
@@ -161,9 +184,40 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
     if (body.scheduled_at && !scheduledAt) return bad('scheduled_at must be a valid date/time.', 'INVALID_SCHEDULE');
     if (next === 'CONFIRMED' && !scheduledAt) return bad('A confirmed site visit needs a scheduled date and time.', 'SCHEDULE_REQUIRED');
     if (next === 'CONFIRMED') {
-      const conversations = await supabaseAdminGet('whatsapp_conversations', { select: 'id,phone,status', lead_id: `eq.${visit.lead_id}`, order: 'last_message_at.desc.nullslast', limit: '1' });
-      if (!conversations[0]) return { status: 409, error: { code: 'NO_WHATSAPP_CONVERSATION', message: 'Cannot confirm this visit because the lead has no WhatsApp conversation.' } };
-      try { await writeOutbound(conversations[0], `Your site visit for ${visit.properties?.title || visit.properties?.property_code || 'the selected property'} is confirmed for ${dateLabel(scheduledAt)}. We look forward to seeing you.`); } catch (e) { return { status: 502, error: { code: 'WHATSAPP_CONFIRMATION_FAILED', message: e?.message || 'WhatsApp confirmation failed.' } }; }
+      let conv = (await supabaseAdminGet('whatsapp_conversations', { select: 'id,phone,status', lead_id: `eq.${visit.lead_id}`, order: 'last_message_at.desc.nullslast', limit: '1' }))[0];
+      if (!conv && visit.leads?.phone) {
+        conv = await getOrCreateConversation(visit.lead_id, visit.leads.phone);
+      }
+      if (conv) {
+        try {
+          const customerName = visit.leads?.name || 'Valued Customer';
+          const projectName = visit.properties?.title || visit.properties?.property_code || 'VR Real Estate Property';
+          const scheduleText = dateLabel(scheduledAt);
+          const messageText =
+            `*VR REAL ESTATE – SITE VISIT CONFIRMED* ✅\n\n` +
+            `Hello ${customerName},\n\n` +
+            `Great news! Your site visit for *${projectName}* has been *CONFIRMED* by our team.\n\n` +
+            `📍 *Project / Unit:* ${projectName}\n` +
+            `📅 *Scheduled Date:* ${scheduleText}\n\n` +
+            `Our site coordinator will be present at the site to guide you through the venture. If free pickup was requested, our driver will contact you beforehand.\n\n` +
+            `Need any assistance? Reply directly to this WhatsApp message.\n\n` +
+            `Best regards,\n` +
+            `*VR Real Estate Team*`;
+          await writeOutbound(conv, messageText);
+        } catch (e) {
+          console.warn('[crm] site-visit WhatsApp send warning:', e?.message || e);
+        }
+      }
+      // Also sync any linked pending booking to CONFIRMED
+      await supabaseAdminPatch('bookings', {
+        lead_id: `eq.${visit.lead_id}`,
+        property_id: `eq.${visit.property_id}`,
+        status: 'eq.PENDING'
+      }, {
+        status: 'CONFIRMED',
+        confirmed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }).catch(() => null);
     }
     const update = { status: next, scheduled_at: scheduledAt, notes: body.notes !== undefined ? clean(body.notes) || null : visit.notes, updated_at: new Date().toISOString() };
     if (next === 'CONFIRMED') update.confirmed_at = new Date().toISOString(); if (next === 'COMPLETED') update.completed_at = new Date().toISOString(); if (next === 'CANCELLED') update.cancelled_at = new Date().toISOString();
@@ -193,14 +247,92 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
   }
   if (req.method === 'PATCH' && section === 'bookings' && id) {
     const rows = await supabaseAdminGet('bookings', { select: 'id,lead_id,property_id,status,booking_reference,amount,currency,booked_at,confirmed_at,cancelled_at,notes', id: `eq.${id}`, limit: '1' }); const booking = rows[0];
-    if (!booking) return { status: 404, error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' } };
-    const next = clean(body.status).toUpperCase(); if (!BOOKING_STATUSES.includes(next)) return bad('Invalid booking status.', 'INVALID_BOOKING_STATUS');
-    const allowed = { PENDING: ['CONFIRMED','CANCELLED'], CONFIRMED: ['COMPLETED','CANCELLED'], COMPLETED: [], CANCELLED: [] }; if (booking.status !== next && !allowed[booking.status]?.includes(next)) return bad(`Invalid booking transition: ${booking.status} → ${next}.`, 'INVALID_BOOKING_TRANSITION');
-    if (next === 'CONFIRMED') { const result = await inventoryUpdate(booking.property_id, 'BOOKED', 'Booking confirmed'); if (result.status !== 200) return result; }
+    const next = clean(body.status).toUpperCase();
+    if (!BOOKING_STATUSES.includes(next)) return bad('Invalid booking status.', 'INVALID_BOOKING_STATUS');
+    const allowed = { PENDING: ['CONFIRMED','CANCELLED'], CONFIRMED: ['COMPLETED','CANCELLED'], COMPLETED: [], CANCELLED: [] };
+    if (booking.status !== next && !allowed[booking.status]?.includes(next)) return bad(`Invalid booking transition: ${booking.status} → ${next}.`, 'INVALID_BOOKING_TRANSITION');
+    if (next === 'CONFIRMED' && booking.property_id) {
+      const result = await inventoryUpdate(booking.property_id, 'BOOKED', 'Booking confirmed');
+      if (result.status !== 200 && result.status !== 409 && result.status !== 404) return result;
+    }
     if (next === 'CANCELLED') { const property = await propertyById(booking.property_id); if (property?.inventory_status === 'BOOKED' || property?.inventory_status === 'RESERVED') { const result = await inventoryUpdate(booking.property_id, 'AVAILABLE', 'Booking cancelled'); if (result.status !== 200) return result; } }
     const update = { status: next, updated_at: new Date().toISOString() }; if (next === 'CONFIRMED') { update.confirmed_at = new Date().toISOString(); update.booked_at = new Date().toISOString(); } if (next === 'CANCELLED') update.cancelled_at = new Date().toISOString(); if (body.notes !== undefined) update.notes = clean(body.notes) || null;
     const updated = await supabaseAdminPatch('bookings', { id: `eq.${id}`, status: `eq.${booking.status}` }, update); if (!updated[0]) return { status: 409, error: { code: 'BOOKING_CHANGED', message: 'Booking changed before this action completed. Refresh and try again.' } };
-    return { status: 200, data: { booking: updated[0] } };
+
+    // When confirmed by owner, dispatch WhatsApp Site Visit Confirmation to customer!
+    let confirmationSent = false;
+    if (next === 'CONFIRMED') {
+      try {
+        const [lead, property, linkedVisits] = await Promise.all([
+          leadById(booking.lead_id),
+          propertyById(booking.property_id),
+          supabaseAdminGet('site_visits', {
+            select: 'id,scheduled_at,status,notes',
+            lead_id: `eq.${booking.lead_id}`,
+            property_id: `eq.${booking.property_id}`,
+            order: 'created_at.desc',
+            limit: '1'
+          }).catch(() => [])
+        ]);
+
+        const linkedVisit = linkedVisits[0];
+        if (linkedVisit && linkedVisit.status === 'REQUESTED') {
+          await supabaseAdminPatch('site_visits', { id: `eq.${linkedVisit.id}` }, {
+            status: 'CONFIRMED',
+            confirmed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }).catch(() => null);
+        }
+
+        if (lead?.phone) {
+          const conv = await getOrCreateConversation(lead.id, lead.phone);
+          const customerName = lead.name || 'Valued Customer';
+          const projectName = property?.title || property?.projects?.name || 'VR Real Estate Property';
+          let scheduleText = linkedVisit?.scheduled_at ? dateLabel(linkedVisit.scheduled_at) : 'as requested';
+          if ((!linkedVisit?.scheduled_at || scheduleText === 'the requested time') && booking.notes) {
+            const m = booking.notes.match(/on\s+([^(]+)(?:\(([^)]+)\))?/i);
+            if (m) scheduleText = `${m[1].trim()}${m[2] ? ` (${m[2].trim()})` : ''}`;
+          }
+
+          const messageText =
+            `*VR REAL ESTATE – SITE VISIT CONFIRMED* ✅\n\n` +
+            `Hello ${customerName},\n\n` +
+            `Great news! Your site visit for *${projectName}* has been *CONFIRMED* by our team.\n\n` +
+            `📍 *Project / Unit:* ${projectName} (${property?.property_code || 'Unit'})\n` +
+            `📅 *Scheduled Date:* ${scheduleText}\n` +
+            `${booking.booking_reference ? `🔖 *Booking Reference:* ${booking.booking_reference}\n` : ''}\n` +
+            `Our site coordinator will be present at the site to guide you through the venture. If free pickup was requested, our driver will contact you beforehand.\n\n` +
+            `Need any assistance? Reply directly to this WhatsApp message.\n\n` +
+            `Best regards,\n` +
+            `*VR Real Estate Team*`;
+
+          if (conv) {
+            await writeOutbound(conv, messageText);
+            confirmationSent = true;
+          } else {
+            await sendWhatsApp(lead.phone, messageText);
+            confirmationSent = true;
+          }
+          console.log(`[crm] Site visit confirmation WhatsApp sent to customer ${lead.phone} for booking ${id}`);
+        }
+      } catch (confirmErr) {
+        console.error('[crm] Failed to send WhatsApp site visit confirmation to customer:', confirmErr?.message || confirmErr);
+      }
+    }
+
+    if (next === 'CANCELLED') {
+      await supabaseAdminPatch('site_visits', {
+        lead_id: `eq.${booking.lead_id}`,
+        property_id: `eq.${booking.property_id}`,
+        status: 'eq.REQUESTED'
+      }, {
+        status: 'CANCELLED',
+        cancelled_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }).catch(() => null);
+    }
+
+    return { status: 200, data: { booking: updated[0], confirmation_sent: confirmationSent } };
   }
   return null;
 }

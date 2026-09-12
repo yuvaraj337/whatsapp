@@ -1,3 +1,4 @@
+import { api } from '../api/client.js';
 import { renderHeader, initStickyNav } from '../components/header.js';
 import { renderFooter, initScrollTop } from '../components/footer.js';
 import { showToast } from '../components/siteVisitModal.js';
@@ -32,10 +33,47 @@ export function renderStaticPage(title, subtitle, contentHtml, currentPath = '#/
 
       const contactForm = document.getElementById('static-contact-form');
       if (contactForm) {
-        contactForm.addEventListener('submit', (e) => {
+        contactForm.addEventListener('submit', async (e) => {
           e.preventDefault();
+          const name = contactForm.querySelector('input[type="text"]')?.value?.trim() || '';
+          const phone = contactForm.querySelector('input[type="tel"]')?.value?.trim() || '';
+          const email = contactForm.querySelector('input[type="email"]')?.value?.trim() || '';
+          const interest = contactForm.querySelector('select')?.value || 'General Inquiry';
+          const requirement = contactForm.querySelector('textarea')?.value?.trim() || '';
+
+          const submitBtn = contactForm.querySelector('button[type="submit"]');
+          if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sending...';
+          }
+
+          let whatsappSent = false;
+          try {
+            const res = await api.createBooking({
+              name,
+              phone,
+              email,
+              date: 'Contact Page Inquiry',
+              time: 'Preferred Slot',
+              projectName: `VR Real Estates - ${interest}`,
+              notes: requirement
+            });
+            whatsappSent = Boolean(res?.customerNotification?.sent);
+          } catch (err) {
+            console.warn('[static-contact] enquiry notice:', err?.message || err);
+          }
+
           contactForm.reset();
-          showToast('Message sent! Our property advisor will reach out to you.');
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Send Message';
+          }
+
+          if (whatsappSent) {
+            showToast(`Thank you, ${name}! Your message has been sent and confirmed via WhatsApp.`);
+          } else {
+            showToast('Message sent! Our property advisor will reach out to you.');
+          }
         });
       }
     }

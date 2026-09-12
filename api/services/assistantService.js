@@ -1,23 +1,28 @@
 import { listProjects, getProjectDetails } from './projectsService.js';
-import { listProperties } from './propertiesService.js';
+import { listProperties, getPropertyByCode } from './propertiesService.js';
 import { listProjectPlots } from './plotsService.js';
+import { supabaseGet } from '../lib/supabase.js';
 
 const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_HISTORY_MESSAGES = 12;
 const AI_TIMEOUT_MS = 15000;
+const MAX_CONTEXT_PROPERTIES = 60;
+const MAX_CONTEXT_PLOTS = 80;
 
-const SYSTEM_PROMPT = `You are the VR Real Estate AI Assistant for the VR Real Estates website.
-Answer using only the verified real-estate data supplied in the context and the conversation.
+const SYSTEM_PROMPT = `You are the VR Real Estate AI Assistant for the VR Real Estates website and WhatsApp.
+Answer only from verified data supplied in the context and the conversation.
 Never invent prices, availability, dimensions, locations, amenities, RERA information, approvals, returns, or property details.
-If the supplied data does not contain an answer, say that the information is not available and, when useful, suggest contacting VR Real Estate or booking a site visit.
+If the supplied data does not contain an answer, say that the information is not available and suggest contacting VR Real Estate or requesting a site visit when useful.
 Availability claims must reflect the supplied current inventory only.
+Never claim that a plot is reserved, booked, sold, or a site visit is confirmed unless the supplied data explicitly says so.
 Do not make legal, financial, investment-return, approval, title, or guaranteed-outcome claims.
 You may explain general real-estate concepts briefly, but redirect unrelated questions toward VR Real Estate topics.
 The source contains local SVG/project coordinates for the master plan; never describe them as latitude/longitude.
 When discussing P18, preserve its source identifiers exactly if relevant: property code P18, source id P18, source number P118.
-When a visitor expresses buying or site-visit intent, naturally suggest the site's existing site-visit/contact option without claiming that a booking has been completed.`;
+When a visitor expresses buying or site-visit intent, naturally suggest the existing site-visit/contact option without claiming that a booking has been completed.
+Keep answers concise and useful for chat. Prefer bullets for multiple properties.`;
 
 function sanitizeHistory(conversation) {
   if (!Array.isArray(conversation)) return [];
@@ -30,24 +35,94 @@ function sanitizeHistory(conversation) {
     }));
 }
 
-function compactContext(projects, details, properties, plots) {
+function compactContext({ projects = [], details = [], properties = [], plots = [], matches = [] } = {}) {
   return JSON.stringify({
     projects,
     project_details: details,
-    properties,
-    green_meadows_plots: plots
+    properties: properties.slice(0, MAX_CONTEXT_PROPERTIES),
+    green_meadows_plots: plots.slice(0, MAX_CONTEXT_PLOTS),
+    exact_matches: matches
   });
 }
 
-async function loadContext() {
+function requestedPlotNumbers(message) {
+  const numbers = new Set();
+  const patterns = [
+    /\b(?:plot|site|property)\s*(?:no\.?|number|#)?\s*(\d{1,5})\b/gi,
+    /\bP\s*(\d{1,5})\b/gi
+  ];
+  for (const pattern of patterns) {
+    for (const match of message.matchAll(pattern)) numbers.add(Number(match[1]));
+  }
+  return [...numbers].slice(0, 5);
+}
+
+function wantsAvailability(message) {
+  return /\b(available|availability|vacant|open|for sale|still available)\b/i.test(message);
+}
+
+function wantsProjects(message) {
+  return /\b(projects?|locations?|developments?|properties?)\b/i.test(message) &&
+    /\b(what|which|show|list|have|available|offer|options?)\b/i.test(message);
+}
+
+function wantsProjectDetails(message) {
+  return /\b(amenit|location|where|address|rera|developer|about|facilit|landmark)\b/i.test(message);
+}
+
+async function findPlotsByNumber(numbers) {
+  if (!numbers.length) return [];
+  const rows = await supabaseGet('plot_details', {
+    select: 'property_id,plot_number,plot_area,area_unit,label_x,label_y,rotation,display_order',
+    plot_number: `in.(${numbers.join(',')})`,
+    order: 'plot_number.asc',
+    limit: String(numbers.length * 2)
+  });
+  if (!rows.length) return [];
+  const uniqueIds = [...new Set(rows.map((row) => row.property_id).filter(Boolean))];
+  const properties = await supabaseGet('properties', {
+    select: 'id,project_id,property_code,slug,property_type,inventory_status,title,description,area,area_unit,price,currency,metadata',
+    id: `in.(${uniqueIds.join(',')})`,
+    order: 'property_code.asc'
+  });
+  const propertyMap = new Map(properties.map((row) => [row.id, row]));
+  return rows.map((plot) => ({
+    plot_number: plot.plot_number,
+    plot_area: plot.plot_area,
+    area_unit: plot.area_unit,
+    property: propertyMap.get(plot.property_id) || null
+  })).filter((row) => row.property);
+}
+
+async function loadContext(message) {
+  const text = message.toLowerCase();
+  const plotNumbers = requestedPlotNumbers(message);
+  const exactPlots = await findPlotsByNumber(plotNumbers);
+
   const projects = await listProjects();
   const details = [];
-  for (const project of projects) {
-    details.push(await getProjectDetails(project.slug));
+  const properties = [];
+  let plots = [];
+
+  if (plotNumbers.length) {
+    const projectIds = [...new Set(exactPlots.map((item) => item.property?.project_id).filter(Boolean))];
+    for (const projectId of projectIds.slice(0, 3)) {
+      const project = projects.find((item) => item.id === projectId);
+      if (project) details.push(await getProjectDetails(project.slug));
+    }
+  } else if (wantsProjects(message) || wantsProjectDetails(message)) {
+    for (const project of projects.slice(0, 8)) details.push(await getProjectDetails(project.slug));
   }
-  const properties = await listProperties();
-  const plots = await listProjectPlots('vr-green-meadows');
-  return compactContext(projects, details, properties, plots);
+
+  if (wantsAvailability(message) || /\b(price|cost|budget|sq\.?\s*yd|square|area|size|facing)\b/i.test(message)) {
+    properties.push(...await listProperties({ status: wantsAvailability(message) ? 'AVAILABLE' : undefined }));
+  }
+
+  if (/green\s+meadows|plot|site\b/i.test(text) && !plotNumbers.length) {
+    plots = (await listProjectPlots('vr-green-meadows')) || [];
+  }
+
+  return compactContext({ projects, details, properties, plots, matches: exactPlots });
 }
 
 function extractText(payload) {
@@ -80,7 +155,14 @@ export async function answerAssistant({ message, conversation = [] }) {
     return { status: 503, error: { code: 'AI_NOT_CONFIGURED', message: 'The AI assistant is not configured yet.' } };
   }
 
-  const context = await loadContext();
+  let context;
+  try {
+    context = await loadContext(message.trim());
+  } catch (error) {
+    console.error('[assistant] context load failed', error?.message || error);
+    return { status: 502, error: { code: 'AI_CONTEXT_ERROR', message: 'The assistant could not load the latest property data.' } };
+  }
+
   const contents = [
     ...sanitizeHistory(conversation),
     {
@@ -99,13 +181,9 @@ export async function answerAssistant({ message, conversation = [] }) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: SYSTEM_PROMPT }]
-        },
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents,
-        generationConfig: {
-          maxOutputTokens: 500
-        }
+        generationConfig: { maxOutputTokens: 500, temperature: 0.2 }
       }),
       signal: AbortSignal.timeout(AI_TIMEOUT_MS)
     });
@@ -114,46 +192,33 @@ export async function answerAssistant({ message, conversation = [] }) {
     console.error('[assistant] Gemini provider request failed', {
       timeout: timedOut,
       message: timedOut ? 'Provider request timed out.' : (error?.message || 'Network request failed.'),
-      model: MODEL,
-      endpoint
+      model: MODEL
     });
     return { status: 502, error: { code: 'AI_PROVIDER_ERROR', message: 'The AI assistant is temporarily unavailable.' } };
   }
 
   if (!response.ok) {
     let providerPayload = null;
-    try {
-      providerPayload = await response.json();
-    } catch {
-      await response.text().catch(() => '');
-    }
-
+    try { providerPayload = await response.json(); } catch { await response.text().catch(() => ''); }
     const details = providerErrorDetails(providerPayload);
     console.error('[assistant] Gemini provider request failed', {
       status: response.status,
       type: details.status,
       code: details.code,
       message: details.message,
-      model: MODEL,
-      endpoint
+      model: MODEL
     });
-
     return { status: 502, error: { code: 'AI_PROVIDER_ERROR', message: 'The AI assistant is temporarily unavailable.' } };
   }
 
   let payload;
-  try {
-    payload = await response.json();
-  } catch {
+  try { payload = await response.json(); } catch {
     return { status: 502, error: { code: 'AI_INVALID_RESPONSE', message: 'The AI assistant returned an invalid response.' } };
   }
 
   const reply = extractText(payload);
   if (!reply) {
-    console.error('[assistant] Gemini provider returned no text', {
-      model: MODEL,
-      endpoint
-    });
+    console.error('[assistant] Gemini provider returned no text', { model: MODEL });
     return { status: 502, error: { code: 'AI_INVALID_RESPONSE', message: 'The AI assistant returned an invalid response.' } };
   }
 

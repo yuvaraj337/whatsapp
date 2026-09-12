@@ -1,16 +1,23 @@
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+function getSupabaseAdminConfig() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !key) {
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment or .env');
+  }
+
+  return {
+    url,
+    key,
+    restUrl: `${url.replace(/\/$/, '')}/rest/v1`
+  };
 }
 
-const REST_URL = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1`;
-
 function headers(extra = {}) {
+  const { key } = getSupabaseAdminConfig();
   return {
-    apikey: SUPABASE_SERVICE_ROLE_KEY,
-    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+    apikey: key,
+    Authorization: `Bearer ${key}`,
     Accept: 'application/json',
     'Content-Type': 'application/json',
     ...extra
@@ -18,7 +25,8 @@ function headers(extra = {}) {
 }
 
 export async function supabaseAdminGet(resource, params = {}) {
-  const url = new URL(`${REST_URL}/${resource}`);
+  const { restUrl } = getSupabaseAdminConfig();
+  const url = new URL(`${restUrl}/${resource}`);
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null) url.searchParams.set(key, value);
   }
@@ -28,7 +36,8 @@ export async function supabaseAdminGet(resource, params = {}) {
 }
 
 export async function supabaseAdminPost(resource, payload, prefer = 'return=representation') {
-  const response = await fetch(`${REST_URL}/${resource}`, {
+  const { restUrl } = getSupabaseAdminConfig();
+  const response = await fetch(`${restUrl}/${resource}`, {
     method: 'POST',
     headers: headers({ Prefer: prefer }),
     body: JSON.stringify(payload)
@@ -38,7 +47,8 @@ export async function supabaseAdminPost(resource, payload, prefer = 'return=repr
 }
 
 export async function supabaseAdminPatch(resource, params, payload) {
-  const url = new URL(`${REST_URL}/${resource}`);
+  const { restUrl } = getSupabaseAdminConfig();
+  const url = new URL(`${restUrl}/${resource}`);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   const response = await fetch(url, {
     method: 'PATCH',

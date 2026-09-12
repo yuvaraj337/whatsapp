@@ -11,13 +11,13 @@ export function renderHeader(options = {}) {
       </a>
     `;
     rightNavElement = `
-      <button class="header-enquire-btn" onclick="window.openSiteVisitModal('Amodha')">
+      <button class="header-enquire-btn" onclick="window.openGeneralEnquiry ? window.openGeneralEnquiry({ projectName: 'Amodha' }) : window.openSiteVisitModal('Amodha')">
         Enquire Now &rarr;
       </button>
     `;
   } else if (isOpenPlots) {
     rightNavElement = `
-      <button class="header-enquire-btn" onclick="window.openSiteVisitModal('Open Plots')">
+      <button class="header-enquire-btn" onclick="window.openGeneralEnquiry ? window.openGeneralEnquiry({ projectName: 'Open Plots' }) : window.openSiteVisitModal('Open Plots')">
         Enquire Now &rarr;
       </button>
     `;
@@ -38,7 +38,7 @@ export function renderHeader(options = {}) {
           <span>info@vrrealestates.com</span>
         </a>
       </div>
-      <button class="header-enquire-btn" onclick="window.openSiteVisitFlow ? window.openSiteVisitFlow(null, 'form') : window.openSiteVisitModal('VR Header')">
+      <button class="header-enquire-btn" onclick="window.openGeneralEnquiry ? window.openGeneralEnquiry() : (window.openSiteVisitModal ? window.openSiteVisitModal('VR Header') : null)">
         Enquire Now &rarr;
       </button>
     `;

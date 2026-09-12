@@ -1,4 +1,5 @@
 import { api } from '../api/client.js';
+import { openSiteVisitFlow } from './sharedBookSiteVisit.js';
 import '../../styles/aiAssistant.css';
 
 const MAX_MESSAGE_LENGTH = 2000;
@@ -134,7 +135,14 @@ export function initAiAssistant() {
   close.addEventListener('click', () => setOpen(panel, launcher, false));
 
   visit.addEventListener('click', () => {
-    if (typeof window.openSiteVisitModal === 'function') window.openSiteVisitModal('VR Real Estate');
+    setOpen(panel, launcher, false);
+    if (typeof openSiteVisitFlow === 'function') {
+      openSiteVisitFlow({ isManual: true }, 'form');
+    } else if (typeof window.openSiteVisitFlow === 'function') {
+      window.openSiteVisitFlow({ isManual: true }, 'form');
+    } else if (typeof window.openSiteVisitModal === 'function') {
+      window.openSiteVisitModal('VR Real Estate');
+    }
   });
 
   input.addEventListener('keydown', (event) => {

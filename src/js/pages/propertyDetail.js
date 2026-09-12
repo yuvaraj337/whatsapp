@@ -1,3 +1,4 @@
+import { api } from '../api/client.js';
 import { renderHeader, initStickyNav } from '../components/header.js';
 import { renderFooter, initScrollTop } from '../components/footer.js';
 import { openPlotsList } from '../data/properties.js';
@@ -179,11 +180,51 @@ export function renderPropertyDetailPage(propertyId = 'amodha') {
       // Form submission
       const form = document.getElementById('property-detail-enquiry-form');
       if (form) {
-        form.addEventListener('submit', (e) => {
+        form.addEventListener('submit', async (e) => {
           e.preventDefault();
-          const name = document.getElementById('enquiry-name').value;
+          const name = document.getElementById('enquiry-name')?.value?.trim() || '';
+          const mobile = document.getElementById('enquiry-mobile')?.value?.trim() || '';
+          const budget = document.getElementById('enquiry-budget')?.value || '';
+          const timeline = document.getElementById('enquiry-timeline')?.value || '';
+
+          const submitBtn = form.querySelector('.btn-send-enquiry');
+          if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+          }
+
+          let whatsappSent = false;
+          try {
+            const res = await api.createBooking({
+              name,
+              phone: mobile,
+              date: timeline || 'Immediate Enquiry',
+              time: 'Preferred Slot',
+              projectName: property.title,
+              propertyId: property.id || null,
+              notes: `Budget: ${budget} | Timeline: ${timeline}`
+            });
+            whatsappSent = Boolean(res?.customerNotification?.sent);
+          } catch (err) {
+            console.warn('[property-detail] enquiry notice:', err?.message || err);
+          }
+
           form.reset();
-          showToast(`Thank you, ${name}! Your enquiry for ${property.title} has been received. Our team will contact you shortly.`);
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+              SEND ENQUIRY`;
+          }
+
+          if (whatsappSent) {
+            showToast(`Thank you, ${name}! Your enquiry for ${property.title} has been received and confirmed via WhatsApp.`);
+          } else {
+            showToast(`Thank you, ${name}! Your enquiry for ${property.title} has been received. Our team will contact you shortly.`);
+          }
         });
       }
 

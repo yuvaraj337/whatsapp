@@ -162,15 +162,15 @@
 
 @media (max-width: 640px) {
   #ref-floating-whatsapp {
-    right: 16px !important;
-    bottom: 16px !important;
-    z-index: 1300 !important;
+    right: 14px !important;
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px)) !important;
+    z-index: 1250 !important;
   }
 
   #vr-ai-assistant {
-    right: 16px !important;
-    bottom: 88px !important;
-    z-index: 1301 !important;
+    right: 14px !important;
+    bottom: calc(124px + env(safe-area-inset-bottom, 0px)) !important;
+    z-index: 1245 !important;
   }
 
   #vr-ai-assistant .vr-ai-panel {
@@ -179,8 +179,8 @@
   }
 
   #ref-scroll-top-btn {
-    right: 16px !important;
-    bottom: 142px !important;
-    z-index: 1300 !important;
+    right: 14px !important;
+    bottom: calc(186px + env(safe-area-inset-bottom, 0px)) !important;
+    z-index: 1240 !important;
   }
 }

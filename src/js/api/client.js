@@ -108,5 +108,15 @@ export const api = {
         conversation
       }
     });
+  },
+
+  /**
+   * Submit a site visit / booking request.
+   */
+  createBooking(bookingData) {
+    return request('/bookings', {
+      method: 'POST',
+      body: bookingData
+    });
   }
 };

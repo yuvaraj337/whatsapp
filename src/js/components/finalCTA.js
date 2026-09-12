@@ -30,7 +30,7 @@ export function renderFinalCTA() {
 
             <!-- Dual CTA Buttons -->
             <div class="ref-cta-buttons-row">
-              <button class="ref-cta-btn-enquire" onclick="window.openSiteVisitModal ? window.openSiteVisitModal('Final CTA') : alert('Enquiry Modal')">
+              <button class="ref-cta-btn-enquire" onclick="window.openGeneralEnquiry ? window.openGeneralEnquiry({ projectName: 'General Enquiry' }) : (window.openSiteVisitModal ? window.openSiteVisitModal('Final CTA') : null)">
                 <span>Enquire Now</span>
                 <span class="btn-arrow">&rarr;</span>
               </button>

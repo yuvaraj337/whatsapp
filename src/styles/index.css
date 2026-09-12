@@ -3346,3 +3346,85 @@ body {
   transition: all 0.25s ease;
   cursor: pointer;
 }
+
+/* ==========================================================================
+   MOBILE STICKY BOTTOM ACTION BAR & FLOATING BUTTON COLLISION AVOIDANCE
+   ========================================================================== */
+.ref-mobile-bottom-bar {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  body {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .ref-mobile-bottom-bar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1200;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-top: 1px solid #E2E8F0;
+    padding: 8px 12px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    gap: 8px;
+    box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.08);
+  }
+
+  .ref-mbb-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 0.84rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+  }
+
+  .ref-mbb-btn.enquire {
+    background: #F1F5F9;
+    color: #1A3B2B;
+    border: 1px solid #CBD5E1;
+  }
+
+  .ref-mbb-btn.visit {
+    background: #1A3B2B;
+    color: #FFFFFF;
+    box-shadow: 0 3px 10px rgba(26, 59, 43, 0.25);
+  }
+
+  /* Safe-spacing for floating action buttons so they never collide with bottom bar */
+  .ref-floating-whatsapp,
+  .floating-whatsapp {
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px)) !important;
+    right: 14px !important;
+    width: 46px !important;
+    height: 46px !important;
+    z-index: 1250 !important;
+  }
+
+  .ref-scroll-top-btn,
+  .floating-scroll-top {
+    bottom: calc(186px + env(safe-area-inset-bottom, 0px)) !important;
+    right: 14px !important;
+    width: 40px !important;
+    height: 40px !important;
+    z-index: 1240 !important;
+  }
+
+  /* Hide sticky bottom bar during fullscreen master plan mode */
+  .master-plan-fullscreen-active .ref-mobile-bottom-bar,
+  body.mp-fullscreen-locked .ref-mobile-bottom-bar {
+    display: none !important;
+  }
+}

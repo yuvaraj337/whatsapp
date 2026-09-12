@@ -105,82 +105,79 @@ function renderPerimeterTreeLine() {
 // Each plot coordinates match the exact visible plot grass boundaries
 // ============================================================================
 export const PLOT_COORDINATES = {
-  // Row 1 (y: 121, height: 90)
-  P01: { x: 250, y: 121, width: 72, height: 90 },
-  P02: { x: 332, y: 121, width: 72, height: 90 },
-  P03: { x: 415, y: 121, width: 72, height: 90 },
-  P04: { x: 498, y: 121, width: 73, height: 90 },
-  P05: { x: 582, y: 121, width: 72, height: 90 },
-  P06: { x: 665, y: 121, width: 73, height: 90 },
+  // Row 1 (y: 124, height: 88) - 6 Plots
+  P01: { x: 247, y: 124, width: 78, height: 88 },
+  P02: { x: 330, y: 124, width: 77, height: 88 },
+  P03: { x: 413, y: 124, width: 78, height: 88 },
+  P04: { x: 496, y: 124, width: 78, height: 88 },
+  P05: { x: 579, y: 124, width: 78, height: 88 },
+  P06: { x: 662, y: 124, width: 78, height: 88 },
 
-  // Row 2 (y: 297, height: 93)
-  P07: { x: 250, y: 297, width: 72, height: 93 },
-  P08: { x: 332, y: 297, width: 72, height: 93 },
-  P09: { x: 415, y: 297, width: 72, height: 93 },
-  P10: { x: 498, y: 297, width: 73, height: 93 },
-  P11: { x: 582, y: 297, width: 72, height: 93 },
-  P12: { x: 665, y: 297, width: 73, height: 93 },
+  // Row 2 (y: 299, height: 92) - 6 Plots
+  P07: { x: 247, y: 299, width: 78, height: 92 },
+  P08: { x: 330, y: 299, width: 77, height: 92 },
+  P09: { x: 413, y: 299, width: 78, height: 92 },
+  P10: { x: 496, y: 299, width: 78, height: 92 },
+  P11: { x: 579, y: 299, width: 78, height: 92 },
+  P12: { x: 662, y: 299, width: 78, height: 92 },
 
-  // Row 3 (y: 476, height: 94)
-  P13: { x: 250, y: 476, width: 72, height: 94 },
-  P14: { x: 332, y: 476, width: 72, height: 94 },
-  P15: { x: 415, y: 476, width: 72, height: 94 },
-  P16: { x: 498, y: 476, width: 73, height: 94 },
-  P17: { x: 582, y: 476, width: 72, height: 94 },
-  P18: { x: 665, y: 476, width: 73, height: 94 },
+  // Row 3 (y: 478, height: 91) - 6 Plots
+  P13: { x: 247, y: 478, width: 78, height: 91 },
+  P14: { x: 330, y: 478, width: 77, height: 91 },
+  P15: { x: 413, y: 478, width: 78, height: 91 },
+  P16: { x: 496, y: 478, width: 78, height: 91 },
+  P17: { x: 579, y: 478, width: 78, height: 91 },
+  P18: { x: 662, y: 478, width: 78, height: 91 },
 
   // Extra perimeter plots if present in dataset (Columns 7 & 8)
-  P19: { x: 749, y: 121, width: 73, height: 90 },
-  P20: { x: 832, y: 121, width: 72, height: 90 },
-  P21: { x: 749, y: 297, width: 73, height: 93 },
-  P22: { x: 832, y: 297, width: 72, height: 93 },
-  P23: { x: 749, y: 476, width: 73, height: 94 },
-  P24: { x: 832, y: 476, width: 72, height: 94 },
+  P19: { x: 745, y: 124, width: 78, height: 88 },
+  P20: { x: 828, y: 124, width: 78, height: 88 },
+  P21: { x: 745, y: 299, width: 78, height: 92 },
+  P22: { x: 828, y: 299, width: 78, height: 92 },
+  P23: { x: 745, y: 478, width: 78, height: 91 },
+  P24: { x: 828, y: 478, width: 78, height: 91 },
 };
 
 /**
- * 10,000% Pixel-Perfect Interactive 3D Master Plan SVG
+ * Pixel-Perfect Interactive Master Plan SVG
  * Overlays interactive data-driven plot zones & status engine over the photorealistic 3D Master Layout
  */
 export function renderMasterPlanSvg(plots = [], selectedPlotId = 'P18', prefix = 'mp') {
   // Render 18 Interactive Data-Driven Plot Overlays accurately following artwork geometry
   const plotsToRender = plots.slice(0, 18);
   const plotsSvgHtml = plotsToRender.map((p) => {
-    const geo = PLOT_COORDINATES[p.id] || { x: 250, y: 121, width: 72, height: 90 };
+    const geo = PLOT_COORDINATES[p.id] || { x: 247, y: 124, width: 78, height: 88 };
     const { x, y, width, height } = geo;
     const isSelected = p.id.toUpperCase() === selectedPlotId.toUpperCase();
     const isAvailable = p.status === 'available';
     const isReserved = p.status === 'reserved' || p.status === 'booked';
     const isSold = p.status === 'sold';
 
-    let strokeColor = 'rgba(34, 197, 94, 0.7)';
+    // Phase 6 & 7: Subtle, semi-transparent overlays preserving background master-plan artwork
+    let strokeColor = 'rgba(34, 197, 94, 0.55)';
     let strokeWidth = '1.2';
-    let fillColor = 'rgba(34, 197, 94, 0.12)';
-    let textColor = '#0F1E2C';
+    let fillColor = 'rgba(34, 197, 94, 0.08)';
+    let textColor = '#0F261C';
     let subColor = '#4B5563';
-    let filterAttr = '';
 
     if (isSelected) {
       strokeColor = '#0284C7';
-      strokeWidth = '3';
-      fillColor = 'rgba(2, 132, 199, 0.25)';
+      strokeWidth = '2.5';
+      fillColor = 'rgba(2, 132, 199, 0.16)';
       textColor = '#0369A1';
       subColor = '#0284C7';
-      filterAttr = `filter="url(#${prefix}-glow-blue)"`;
     } else if (isReserved) {
-      strokeColor = '#F59E0B';
-      strokeWidth = '2';
-      fillColor = 'rgba(245, 158, 11, 0.28)';
-      textColor = '#78350F';
-      subColor = '#92400E';
-      filterAttr = `filter="url(#${prefix}-glow-amber)"`;
+      strokeColor = 'rgba(239, 68, 68, 0.5)';
+      strokeWidth = '1.4';
+      fillColor = 'rgba(239, 68, 68, 0.12)';
+      textColor = '#7F1D1D';
+      subColor = '#991B1B';
     } else if (isSold) {
-      strokeColor = '#EF4444';
-      strokeWidth = '2';
-      fillColor = 'rgba(239, 68, 68, 0.28)';
+      strokeColor = 'rgba(220, 38, 38, 0.6)';
+      strokeWidth = '1.5';
+      fillColor = 'rgba(220, 38, 38, 0.18)';
       textColor = '#881337';
       subColor = '#9F1239';
-      filterAttr = `filter="url(#${prefix}-glow-rose)"`;
     }
 
     // Centered label coordinates
@@ -189,7 +186,7 @@ export function renderMasterPlanSvg(plots = [], selectedPlotId = 'P18', prefix =
     const pillW = 56;
     const pillH = 32;
     const pillX = cx - pillW / 2;
-    const pillY = cy - pillH / 2 - (isSold || isReserved ? 6 : 0);
+    const pillY = cy - pillH / 2 - (isSold || isReserved ? 5 : 0);
 
     return `
       <g class="plot-item ${isSelected ? 'plot-selected' : ''}" 
@@ -203,19 +200,18 @@ export function renderMasterPlanSvg(plots = [], selectedPlotId = 'P18', prefix =
          tabindex="0"
          aria-label="Plot ${p.num}, ${p.size} Sq.Yds, ${p.status}">
         
-        <!-- Plot Exact Interactive Boundary Overlay & Status Color -->
-        <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="4" 
+        <!-- Plot Exact Boundary Overlay & Semi-Transparent Status Color -->
+        <rect x="${x}" y="${y}" width="${width}" height="${height}" rx="3" 
               fill="${fillColor}" 
               stroke="${strokeColor}" 
               stroke-width="${strokeWidth}" 
-              class="plot-rect" 
-              ${filterAttr} />
+              class="plot-rect" />
 
         <!-- Centered Plot Info Pill -->
         <g class="plot-label-pill" transform="translate(${pillX}, ${pillY})">
-          <rect x="0" y="0" width="${pillW}" height="${pillH}" rx="6" 
-                fill="rgba(255, 255, 255, 0.9)" 
-                stroke="${isSelected ? '#0284C7' : (isSold ? '#FCA5A5' : (isReserved ? '#FDE68A' : 'rgba(34, 197, 94, 0.4)'))}" 
+          <rect x="0" y="0" width="${pillW}" height="${pillH}" rx="5" 
+                fill="rgba(255, 255, 255, 0.92)" 
+                stroke="${isSelected ? '#0284C7' : (isSold ? 'rgba(239, 68, 68, 0.5)' : (isReserved ? 'rgba(245, 158, 11, 0.5)' : 'rgba(34, 197, 94, 0.45)'))}" 
                 stroke-width="${isSelected ? '1.8' : '1'}" />
           
           <!-- Plot ID -->
@@ -242,13 +238,13 @@ export function renderMasterPlanSvg(plots = [], selectedPlotId = 'P18', prefix =
 
         <!-- Status Badge Indicator for Sold/Booked -->
         ${isSold ? `
-          <g transform="translate(${cx - 18}, ${y + height - 17})">
+          <g transform="translate(${cx - 18}, ${y + height - 16})">
             <rect x="0" y="0" width="36" height="13" rx="3" fill="#EF4444" />
             <text x="18" y="9.5" fill="#FFFFFF" font-family="'Plus Jakarta Sans', sans-serif" font-size="7.5" font-weight="800" text-anchor="middle">SOLD</text>
           </g>
         ` : (isReserved ? `
-          <g transform="translate(${cx - 22}, ${y + height - 17})">
-            <rect x="0" y="0" width="44" height="13" rx="3" fill="#F59E0B" />
+          <g transform="translate(${cx - 22}, ${y + height - 16})">
+            <rect x="0" y="0" width="44" height="13" rx="3" fill="#EF4444" />
             <text x="22" y="9.5" fill="#FFFFFF" font-family="'Plus Jakarta Sans', sans-serif" font-size="7.5" font-weight="800" text-anchor="middle">BOOKED</text>
           </g>
         ` : '')}
@@ -417,22 +413,33 @@ export function renderPlotMasterPlan(project) {
                 </div>
               </div>
 
-              <!-- Floating Controls Top Right -->
-              <div class="mp-zoom-controls">
-                <button type="button" class="zoom-btn" id="mp-zoom-in" title="Zoom In">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
-                </button>
-                <button type="button" class="zoom-btn" id="mp-zoom-out" title="Zoom Out">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/></svg>
-                </button>
-                <button type="button" class="zoom-btn" id="mp-zoom-reset" title="Reset View">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/></svg>
-                </button>
-                <button type="button" class="zoom-btn" id="mp-toggle-fullscreen" title="Full Screen Master Plan">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+              <!-- Collapsible Floating Controls Top Right (Phase 10 & 11) -->
+              <div class="mp-floating-controls-wrap" id="mp-controls-wrap">
+                <button type="button" class="mp-ctrl-main-btn" id="mp-toggle-controls" title="Map Controls" aria-label="Toggle map controls" aria-expanded="false">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1E293B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path>
                   </svg>
                 </button>
+                <div class="mp-ctrl-expanded" id="mp-ctrl-expanded" style="display: none;">
+                  <button type="button" class="mp-ctrl-btn" id="mp-zoom-in" title="Zoom In" aria-label="Zoom In">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E293B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+                  </button>
+                  <button type="button" class="mp-ctrl-btn" id="mp-zoom-out" title="Zoom Out" aria-label="Zoom Out">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E293B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
+                  </button>
+                  <button type="button" class="mp-ctrl-btn" id="mp-zoom-reset" title="Reset View" aria-label="Reset view">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E293B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                      <path d="M3 3v5h5"/>
+                    </svg>
+                  </button>
+                  <button type="button" class="mp-ctrl-btn" id="mp-toggle-fullscreen" title="Full Screen View" aria-label="Full Screen View">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1E293B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
 
               <!-- 100% Vector Interactive Layout Canvas -->
@@ -445,7 +452,7 @@ export function renderPlotMasterPlan(project) {
 
             <!-- Mobile Quick Actions -->
             <div class="mp-mobile-quick-actions">
-              <button class="mp-mob-btn primary" onclick="window.openSiteVisitModal('${project.name}')">
+              <button class="mp-mob-btn primary" onclick="window.openPlotSiteVisit ? window.openPlotSiteVisit('${defaultPlot.id}') : (window.openSiteVisitFlow ? window.openSiteVisitFlow() : window.openSiteVisitModal('${project.name}'))">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                 <span>Book a Site Visit</span>
               </button>
@@ -512,10 +519,18 @@ export function renderPlotMasterPlan(project) {
 
       <div class="fs-body">
         <div class="fs-stage" id="fs-stage">
-          <div class="mp-zoom-controls fs-controls">
-            <button type="button" class="zoom-btn" id="fs-zoom-in" title="Zoom In"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg></button>
-            <button type="button" class="zoom-btn" id="fs-zoom-out" title="Zoom Out"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/></svg></button>
-            <button type="button" class="zoom-btn" id="fs-zoom-reset" title="Reset View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/></svg></button>
+          <div class="mp-floating-controls-wrap fs-controls" id="fs-controls-wrap">
+            <button type="button" class="mp-ctrl-main-btn" id="fs-toggle-controls" title="Map Controls" aria-label="Toggle map controls" aria-expanded="false">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1E293B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M12 2v3m0 14v3M2 12h3m14 0h3"></path>
+              </svg>
+            </button>
+            <div class="mp-ctrl-expanded" id="fs-ctrl-expanded" style="display: none;">
+              <button type="button" class="mp-ctrl-btn" id="fs-zoom-in" title="Zoom In" aria-label="Zoom In"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E293B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></button>
+              <button type="button" class="mp-ctrl-btn" id="fs-zoom-out" title="Zoom Out" aria-label="Zoom Out"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E293B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg></button>
+              <button type="button" class="mp-ctrl-btn" id="fs-zoom-reset" title="Reset View" aria-label="Reset View"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E293B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
+            </div>
           </div>
           
           <div class="fs-canvas-scroll" id="fs-canvas-scroll">
@@ -909,65 +924,265 @@ export function initPlotMasterPlan(project) {
     }, 'form');
   };
 
-  const canvasTransform = document.getElementById('mp-canvas-transform');
-  const fsCanvasTransform = document.getElementById('fs-canvas-transform');
   const detailsCard = document.getElementById('mp-details-card');
   const fsPlotPanel = document.getElementById('fs-plot-panel');
   const fsModal = document.getElementById('mp-fullscreen-modal');
-
-  // Zoom handlers for normal view
-  const zoomInBtn = document.getElementById('mp-zoom-in');
-  const zoomOutBtn = document.getElementById('mp-zoom-out');
-  const zoomResetBtn = document.getElementById('mp-zoom-reset');
   const fsToggleBtn = document.getElementById('mp-toggle-fullscreen');
   const fsExitBtn = document.getElementById('fs-exit-btn');
 
-  // Fullscreen zoom buttons
-  const fsZoomInBtn = document.getElementById('fs-zoom-in');
-  const fsZoomOutBtn = document.getElementById('fs-zoom-out');
-  const fsZoomResetBtn = document.getElementById('fs-zoom-reset');
+  // Mathematical Synchronized Pan/Zoom Engine (Phases 4, 8, 9, 12)
+  function createPanZoomController(scrollId, transformId) {
+    const scrollEl = document.getElementById(scrollId);
+    const contentEl = document.getElementById(transformId);
+    if (!scrollEl || !contentEl) return null;
 
-  function updateZoom(newZoom) {
-    currentZoom = Math.min(Math.max(newZoom, 0.7), 2.2);
-    if (canvasTransform) {
-      canvasTransform.style.transform = `scale(${currentZoom})`;
-      canvasTransform.style.transformOrigin = 'center center';
+    let scale = 1.0;
+    let panX = 0;
+    let panY = 0;
+    const minScale = 1.0;
+    const maxScale = 2.8;
+
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let initialPanX = 0;
+    let initialPanY = 0;
+    let pointerMoved = false;
+
+    // Multi-touch pinch tracking (Phase 9)
+    const activeTouches = new Map();
+    let initialPinchDist = 0;
+    let initialPinchScale = 1.0;
+    let pinchCenter = { x: 0, y: 0 };
+
+    // Double-tap tracking
+    let lastTapTime = 0;
+    let lastTapPos = { x: 0, y: 0 };
+
+    function clampPan() {
+      const rect = scrollEl.getBoundingClientRect();
+      const contentW = rect.width * scale;
+      const contentH = rect.height * scale;
+
+      const minX = rect.width - contentW;
+      const minY = rect.height - contentH;
+
+      if (minX >= 0) {
+        panX = minX / 2;
+      } else {
+        panX = Math.min(0, Math.max(minX, panX));
+      }
+
+      if (minY >= 0) {
+        panY = minY / 2;
+      } else {
+        panY = Math.min(0, Math.max(minY, panY));
+      }
     }
+
+    function applyTransform(smooth = false) {
+      clampPan();
+      contentEl.style.transition = smooth ? 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)' : 'none';
+      contentEl.style.transformOrigin = '0 0';
+      contentEl.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+    }
+
+    function zoomAt(targetScale, focalX, focalY, smooth = true) {
+      const newScale = Math.min(Math.max(targetScale, minScale), maxScale);
+      const rect = scrollEl.getBoundingClientRect();
+
+      const fx = focalX !== undefined ? focalX : rect.width / 2;
+      const fy = focalY !== undefined ? focalY : rect.height / 2;
+
+      const contentX = (fx - panX) / scale;
+      const contentY = (fy - panY) / scale;
+
+      scale = newScale;
+      panX = fx - contentX * scale;
+      panY = fy - contentY * scale;
+
+      applyTransform(smooth);
+    }
+
+    function resetView() {
+      scale = 1.0;
+      panX = 0;
+      panY = 0;
+      applyTransform(true);
+    }
+
+    // Pointer Events for Desktop Mouse & Mobile Touch
+    scrollEl.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      activeTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (activeTouches.size === 1) {
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        initialPanX = panX;
+        initialPanY = panY;
+        pointerMoved = false;
+        scrollEl.classList.add('is-dragging');
+      } else if (activeTouches.size === 2) {
+        isDragging = false;
+        const pts = Array.from(activeTouches.values());
+        initialPinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        initialPinchScale = scale;
+        const rect = scrollEl.getBoundingClientRect();
+        pinchCenter = {
+          x: (pts[0].x + pts[1].x) / 2 - rect.left,
+          y: (pts[0].y + pts[1].y) / 2 - rect.top,
+        };
+      }
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (!activeTouches.has(e.pointerId)) return;
+      activeTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (activeTouches.size === 1 && isDragging) {
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if (Math.hypot(dx, dy) > 6) {
+          pointerMoved = true;
+        }
+        if (scale > 1.0 || pointerMoved) {
+          panX = initialPanX + dx;
+          panY = initialPanY + dy;
+          applyTransform(false);
+        }
+      } else if (activeTouches.size === 2) {
+        pointerMoved = true;
+        const pts = Array.from(activeTouches.values());
+        const currentDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        if (initialPinchDist > 0) {
+          const factor = currentDist / initialPinchDist;
+          zoomAt(initialPinchScale * factor, pinchCenter.x, pinchCenter.y, false);
+        }
+      }
+    });
+
+    const onPointerUp = (e) => {
+      if (activeTouches.has(e.pointerId)) {
+        activeTouches.delete(e.pointerId);
+      }
+      if (activeTouches.size === 0) {
+        isDragging = false;
+        scrollEl.classList.remove('is-dragging');
+        applyTransform(true);
+      } else if (activeTouches.size === 1) {
+        const remaining = Array.from(activeTouches.values())[0];
+        startX = remaining.x;
+        startY = remaining.y;
+        initialPanX = panX;
+        initialPanY = panY;
+        isDragging = true;
+      }
+    };
+
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+
+    // Double-tap zoom towards tapped location (Phase 9)
+    scrollEl.addEventListener('click', (e) => {
+      const now = Date.now();
+      const rect = scrollEl.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+
+      if (now - lastTapTime < 320 && Math.hypot(clickX - lastTapPos.x, clickY - lastTapPos.y) < 25) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (scale > 1.25) {
+          resetView();
+        } else {
+          zoomAt(2.1, clickX, clickY, true);
+        }
+        lastTapTime = 0;
+      } else {
+        lastTapTime = now;
+        lastTapPos = { x: clickX, y: clickY };
+      }
+    });
+
+    // Window resize handler: Keep overlays and transform aligned (Phase 4 & Phase 27 Test 9)
+    window.addEventListener('resize', () => {
+      applyTransform(true);
+    });
+
+    return {
+      zoomIn: () => zoomAt(scale + 0.35, undefined, undefined, true),
+      zoomOut: () => zoomAt(scale - 0.35, undefined, undefined, true),
+      reset: resetView,
+      hasMoved: () => pointerMoved,
+      getScale: () => scale
+    };
   }
 
-  function updateFsZoom(newZoom) {
-    currentFsZoom = Math.min(Math.max(newZoom, 0.8), 2.8);
-    if (fsCanvasTransform) {
-      fsCanvasTransform.style.transform = `scale(${currentFsZoom})`;
-      fsCanvasTransform.style.transformOrigin = 'center center';
+  const normalController = createPanZoomController('mp-canvas-scroll', 'mp-canvas-transform');
+  const fsController = createPanZoomController('fs-canvas-scroll', 'fs-canvas-transform');
+
+  // Wire up Collapsible Floating Controls (Phase 10 & 11)
+  function bindCollapsibleControls(prefix, controller) {
+    const controlsWrap = document.getElementById(`${prefix}-controls-wrap`);
+    const toggleBtn = document.getElementById(`${prefix}-toggle-controls`);
+    const expandedControls = document.getElementById(`${prefix}-ctrl-expanded`);
+    const zoomInBtn = document.getElementById(`${prefix}-zoom-in`);
+    const zoomOutBtn = document.getElementById(`${prefix}-zoom-out`);
+    const zoomResetBtn = document.getElementById(`${prefix}-zoom-reset`);
+
+    if (toggleBtn && expandedControls) {
+      toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = expandedControls.style.display !== 'none';
+        if (isOpen) {
+          expandedControls.style.display = 'none';
+          toggleBtn.setAttribute('aria-expanded', 'false');
+          toggleBtn.classList.remove('active');
+        } else {
+          expandedControls.style.display = 'flex';
+          toggleBtn.setAttribute('aria-expanded', 'true');
+          toggleBtn.classList.add('active');
+        }
+      });
+
+      document.addEventListener('click', (e) => {
+        if (controlsWrap && !controlsWrap.contains(e.target)) {
+          expandedControls.style.display = 'none';
+          toggleBtn.setAttribute('aria-expanded', 'false');
+          toggleBtn.classList.remove('active');
+        }
+      });
     }
+
+    if (zoomInBtn && controller) zoomInBtn.addEventListener('click', (e) => { e.stopPropagation(); controller.zoomIn(); });
+    if (zoomOutBtn && controller) zoomOutBtn.addEventListener('click', (e) => { e.stopPropagation(); controller.zoomOut(); });
+    if (zoomResetBtn && controller) zoomResetBtn.addEventListener('click', (e) => { e.stopPropagation(); controller.reset(); });
   }
 
-  if (zoomInBtn) zoomInBtn.addEventListener('click', () => updateZoom(currentZoom + 0.2));
-  if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => updateZoom(currentZoom - 0.2));
-  if (zoomResetBtn) zoomResetBtn.addEventListener('click', () => updateZoom(1));
-
-  if (fsZoomInBtn) fsZoomInBtn.addEventListener('click', () => updateFsZoom(currentFsZoom + 0.25));
-  if (fsZoomOutBtn) fsZoomOutBtn.addEventListener('click', () => updateFsZoom(currentFsZoom - 0.25));
-  if (fsZoomResetBtn) fsZoomResetBtn.addEventListener('click', () => updateFsZoom(1));
+  bindCollapsibleControls('mp', normalController);
+  bindCollapsibleControls('fs', fsController);
 
   // Fullscreen toggle
   if (fsToggleBtn && fsModal) {
-    fsToggleBtn.addEventListener('click', () => {
+    fsToggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       fsModal.style.display = 'flex';
       document.body.style.overflow = 'hidden';
-      updateFsZoom(1);
+      if (fsController) fsController.reset();
     });
   }
 
   if (fsExitBtn && fsModal) {
-    fsExitBtn.addEventListener('click', () => {
+    fsExitBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       fsModal.style.display = 'none';
       document.body.style.overflow = '';
     });
   }
 
-  // Plot Selection function
+  // Plot Selection function (Phase 6, 7, 13)
   function selectPlot(plotId) {
     const plot = plots.find(p => p.id === plotId);
     if (!plot) return;
@@ -994,9 +1209,9 @@ export function initPlotMasterPlan(project) {
       if (isThisPlot) {
         el.classList.add('plot-selected');
         if (rect) {
-          rect.setAttribute('fill', 'rgba(2, 132, 199, 0.25)');
+          rect.setAttribute('fill', 'rgba(2, 132, 199, 0.16)');
           rect.setAttribute('stroke', '#0284C7');
-          rect.setAttribute('stroke-width', '3');
+          rect.setAttribute('stroke-width', '2.5');
         }
         if (text) {
           text.setAttribute('fill', '#0369A1');
@@ -1004,36 +1219,43 @@ export function initPlotMasterPlan(project) {
         }
       } else {
         el.classList.remove('plot-selected');
-        let normalFill = 'rgba(34, 197, 94, 0.12)';
-        let normalStroke = 'rgba(34, 197, 94, 0.7)';
-        let normalText = '#0F1E2C';
+        let normalFill = 'rgba(34, 197, 94, 0.08)';
+        let normalStroke = 'rgba(34, 197, 94, 0.55)';
+        let normalText = '#0F261C';
+        let strokeW = '1.2';
 
         if (status === 'reserved' || status === 'booked') {
-          normalFill = 'rgba(245, 158, 11, 0.28)';
-          normalStroke = '#F59E0B';
-          normalText = '#78350F';
+          normalFill = 'rgba(239, 68, 68, 0.12)';
+          normalStroke = 'rgba(239, 68, 68, 0.5)';
+          normalText = '#7F1D1D';
+          strokeW = '1.4';
         } else if (status === 'sold') {
-          normalFill = 'rgba(239, 68, 68, 0.28)';
-          normalStroke = '#EF4444';
+          normalFill = 'rgba(220, 38, 38, 0.18)';
+          normalStroke = 'rgba(220, 38, 38, 0.6)';
           normalText = '#881337';
+          strokeW = '1.5';
         }
 
         if (rect) {
           rect.setAttribute('fill', normalFill);
           rect.setAttribute('stroke', normalStroke);
-          rect.setAttribute('stroke-width', (status === 'sold' || status === 'reserved' || status === 'booked') ? '2' : '1.2');
+          rect.setAttribute('stroke-width', strokeW);
         }
         if (text) {
           text.setAttribute('fill', normalText);
-          text.setAttribute('font-weight', '900');
+          text.setAttribute('font-weight', '800');
         }
       }
     });
   }
 
-  // Attach plot click listeners
+  // Attach plot click listeners with tap vs drag disambiguation (Phase 9 & 13)
   document.querySelectorAll('.plot-item').forEach(item => {
-    item.addEventListener('click', () => {
+    item.addEventListener('click', (e) => {
+      // Disambiguate tap vs drag
+      if (normalController && normalController.hasMoved()) {
+        return; // Dragging/panning, do not select plot
+      }
       const plotId = item.getAttribute('data-plot-id');
       selectPlot(plotId);
     });
@@ -1140,22 +1362,22 @@ export function initPlotMasterPlan(project) {
 
       if (!isSelected && rect) {
         if (newStatus === 'available') {
-          rect.setAttribute('fill', 'rgba(34, 197, 94, 0.12)');
-          rect.setAttribute('stroke', 'rgba(34, 197, 94, 0.7)');
+          rect.setAttribute('fill', 'rgba(34, 197, 94, 0.08)');
+          rect.setAttribute('stroke', 'rgba(34, 197, 94, 0.55)');
           rect.setAttribute('stroke-width', '1.2');
           rect.removeAttribute('filter');
-          if (text) text.setAttribute('fill', '#0F1E2C');
+          if (text) text.setAttribute('fill', '#0F261C');
         } else if (newStatus === 'reserved' || newStatus === 'booked') {
-          rect.setAttribute('fill', 'rgba(245, 158, 11, 0.28)');
-          rect.setAttribute('stroke', '#F59E0B');
-          rect.setAttribute('stroke-width', '2');
-          rect.setAttribute('filter', 'url(#mp-glow-amber)');
-          if (text) text.setAttribute('fill', '#78350F');
+          rect.setAttribute('fill', 'rgba(239, 68, 68, 0.12)');
+          rect.setAttribute('stroke', 'rgba(239, 68, 68, 0.5)');
+          rect.setAttribute('stroke-width', '1.4');
+          rect.removeAttribute('filter');
+          if (text) text.setAttribute('fill', '#7F1D1D');
         } else if (newStatus === 'sold') {
-          rect.setAttribute('fill', 'rgba(239, 68, 68, 0.28)');
-          rect.setAttribute('stroke', '#EF4444');
-          rect.setAttribute('stroke-width', '2');
-          rect.setAttribute('filter', 'url(#mp-glow-rose)');
+          rect.setAttribute('fill', 'rgba(220, 38, 38, 0.18)');
+          rect.setAttribute('stroke', 'rgba(220, 38, 38, 0.6)');
+          rect.setAttribute('stroke-width', '1.5');
+          rect.removeAttribute('filter');
           if (text) text.setAttribute('fill', '#881337');
         }
       }

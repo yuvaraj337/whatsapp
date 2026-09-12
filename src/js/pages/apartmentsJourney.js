@@ -1,3 +1,4 @@
+import { api } from '../api/client.js';
 // ============================================================================
 // REBUILT FROM SCRATCH — APARTMENT CUSTOMER JOURNEY (9 SCREENS)
 // Authoritative visual match to reference/apartment-flow/ images
@@ -869,12 +870,34 @@ function attachEvents(screen) {
   if (screen === 'enquiry') {
     const form = document.getElementById('apt-ref-enquiry-form');
     if (form) {
-      form.addEventListener('submit', (e) => {
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = document.getElementById('enq-input-name').value.trim();
         const mobile = document.getElementById('enq-input-mobile').value.trim();
         if (!name || name.length < 2) { alert('Please enter your full name.'); return; }
         if (!/^[6-9]\d{9}$/.test(mobile)) { alert('Please enter a valid 10-digit mobile number.'); return; }
+
+        const submitBtn = form.querySelector('button[type="submit"]');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Submitting...';
+        }
+
+        try {
+          await api.createBooking({
+            name,
+            phone: mobile,
+            date: 'Immediate Enquiry',
+            time: 'Preferred Slot',
+            projectName: selectedUnit?.projectName || 'VR Elite Towers',
+            unitName: selectedUnit?.unitName || 'Apartment Unit',
+            propertyId: selectedUnit?.id || null,
+            notes: 'Enquiry from Apartments Journey'
+          });
+        } catch (err) {
+          console.warn('[apt-journey] enquiry notice:', err?.message || err);
+        }
+
         enquiryName = name;
         window._aptNav('/apartments/vr-elite-towers/enquiry-success');
       });
@@ -885,7 +908,7 @@ function attachEvents(screen) {
   if (screen === 'site-visit-form') {
     const form = document.getElementById('apt-ref-sv-form');
     if (form) {
-      form.addEventListener('submit', (e) => {
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const name = document.getElementById('sv-input-name').value.trim();
         const mobile = document.getElementById('sv-input-mobile').value.trim();
@@ -893,6 +916,27 @@ function attachEvents(screen) {
         if (!name || name.length < 2) { alert('Please enter your full name.'); return; }
         if (!/^[6-9]\d{9}$/.test(mobile)) { alert('Please enter a valid 10-digit mobile number.'); return; }
         if (!date) { alert('Please select a preferred date.'); return; }
+
+        const submitBtn = form.querySelector('button[type="submit"]');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Submitting...';
+        }
+
+        try {
+          await api.createBooking({
+            name,
+            phone: mobile,
+            date,
+            time: 'Preferred Slot',
+            projectName: selectedUnit?.projectName || 'VR Elite Towers',
+            unitName: selectedUnit?.unitName || 'Apartment Unit',
+            propertyId: selectedUnit?.id || null
+          });
+        } catch (err) {
+          console.warn('[apt-journey] booking notice:', err?.message || err);
+        }
+
         siteVisitName = name;
         window._aptNav('/apartments/vr-elite-towers/site-visit/success');
       });
