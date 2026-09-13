@@ -40,12 +40,17 @@ export async function resolvePropertyId(hints = {}) {
   let { propertyId, propertyCode, propertyTitle, projectName, propertyType } = hints;
 
   if (propertyId) {
-    const byId = await supabaseAdminGet('properties', {
-      select: 'id,project_id',
-      id: `eq.${propertyId}`,
-      limit: '1'
-    }).catch(() => []);
-    if (byId[0]?.id) return byId[0].id;
+    const isUuid = typeof propertyId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(propertyId);
+    if (isUuid) {
+      const byId = await supabaseAdminGet('properties', {
+        select: 'id,project_id',
+        id: `eq.${propertyId}`,
+        limit: '1'
+      }).catch(() => []);
+      if (byId[0]?.id) return byId[0].id;
+    } else if (!propertyCode) {
+      propertyCode = propertyId;
+    }
   }
 
   // 1. Resolve project by name or known aliases
@@ -90,7 +95,7 @@ export async function resolvePropertyId(hints = {}) {
     const raw = String(propertyCode).trim();
     const vMatch = raw.match(/\bV-?0*([1-9]\d?)\b/i);
     const aMatch = raw.match(/\b([AB])-?0*(\d{3})\b/i);
-    const pMatch = raw.match(/\bP-?0*([1-9]\d?)\b/i);
+    const pMatch = raw.match(/\b(?:Plot\s*#?|P)\s*0*([1-9]\d?)\b/i);
     const fMatch = raw.match(/\bF-([A-Z0-9-]+)\b/i);
 
     if (vMatch) {
@@ -109,6 +114,11 @@ export async function resolvePropertyId(hints = {}) {
       cleanCode = 'F-SIRI-AGRO';
     } else {
       cleanCode = raw.toUpperCase();
+    }
+  } else if (propertyTitle) {
+    const pInTitle = String(propertyTitle).match(/\b(?:Plot\s*#?|P)\s*0*([1-9]\d?)\b/i);
+    if (pInTitle) {
+      cleanCode = `P${pInTitle[1].padStart(2, '0')}`;
     }
   }
 

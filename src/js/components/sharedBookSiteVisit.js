@@ -382,6 +382,10 @@ export function renderScreen2Form(customProp = null) {
     let bookingReference = '';
 
     try {
+      const rawCode = prop?.propertyCode || (prop?.id && /^P\d+/i.test(prop.id) ? prop.id : '');
+      const cleanPlotCode = rawCode || (propertyDetails || prop?.unitName || '').match(/\b(?:Plot\s*#?|P)\s*0*([1-9]\d?)\b/i)?.[0] || (propertyDetails || prop?.unitName || '').replace(/Plot\s*#?/i, 'P').trim();
+      const validPropertyId = typeof prop?.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(prop.id) ? prop.id : null;
+
       const res = await api.createBooking({
         type: 'site_visit',
         name,
@@ -390,9 +394,10 @@ export function renderScreen2Form(customProp = null) {
         date,
         time,
         projectName: chosenProject || 'VR Green Meadows (Open Plots - Shadnagar)',
-        propertyCode: (propertyDetails || prop?.unitName || '').replace(/Plot\s*#?/i, 'P').trim(),
+        propertyCode: cleanPlotCode,
         unitName: propertyDetails || prop?.unitName,
-        propertyId: prop?.id || null,
+        propertyTitle: propertyDetails || prop?.unitName,
+        propertyId: validPropertyId,
         message: `${message}${propertyDetails && !prop ? ` | Property Details: ${propertyDetails}` : ''} | Transport: ${transport}`,
         source: 'Website'
       });
@@ -646,15 +651,20 @@ export function renderEnquiryForm(context = null) {
     let whatsappSent = false;
     let enquiryReference = '';
     try {
+      const rawCode = context?.propertyCode || (context?.id && /^P\d+/i.test(context.id) ? context.id : '');
+      const cleanPlotCode = rawCode || (context?.unitName || '').match(/\b(?:Plot\s*#?|P)\s*0*([1-9]\d?)\b/i)?.[0] || (context?.unitName || '').replace(/Plot\s*#?/i, 'P').trim();
+      const validPropertyId = typeof context?.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(context.id) ? context.id : null;
+
       const res = await api.createBooking({
         type: 'enquiry',
         name,
         phone: mobile,
         email,
         projectName: project,
-        propertyCode: (context?.unitName || '').replace(/Plot\s*#?/i, 'P').trim(),
+        propertyCode: cleanPlotCode,
         unitName: context?.unitName || '',
-        propertyId: context?.id || null,
+        propertyTitle: context?.unitName || '',
+        propertyId: validPropertyId,
         propertyType: context?.type || '',
         message: msg,
         notes: msg,

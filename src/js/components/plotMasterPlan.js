@@ -1,3 +1,4 @@
+import { api } from '../api/client.js';
 import { openSiteVisitFlow } from './sharedBookSiteVisit.js';
 
 // ============================================================================
@@ -834,11 +835,44 @@ export function initPlotMasterPlan(project) {
     if (modalContainer) modalContainer.innerHTML = '';
   };
 
-  window.submitPlotEnquiry = function (event, plotId) {
+  window.submitPlotEnquiry = async function (event, plotId) {
     if (event) event.preventDefault();
     const plot = (plots || []).find(p => p.id === plotId) || plots[0];
     const modalContainer = document.getElementById('modal-container');
     if (!modalContainer) return;
+
+    const name = document.getElementById('plot-enquiry-name')?.value?.trim() || '';
+    const phone = document.getElementById('plot-enquiry-phone')?.value?.trim() || '';
+    const email = document.getElementById('plot-enquiry-email')?.value?.trim() || '';
+    const date = document.getElementById('plot-enquiry-date')?.value?.trim() || '';
+    const msg = document.getElementById('plot-enquiry-message')?.value?.trim() || '';
+    const cleanPlotCode = plot?.num ? 'P' + String(plot.num).replace(/\D/g, '').padStart(2, '0') : (plot?.id || 'P01');
+
+    const form = document.getElementById('plot-enquiry-form');
+    const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting Enquiry...';
+    }
+
+    try {
+      await api.createBooking({
+        type: 'enquiry',
+        name,
+        phone,
+        email,
+        date: date || 'Immediate Enquiry',
+        projectName: project.name || 'VR Green Meadows',
+        propertyCode: cleanPlotCode,
+        propertyTitle: `Plot ${plot.num}`,
+        propertyType: 'PLOT',
+        message: msg || `Enquiry for Plot ${plot.num} in ${project.name || 'VR Green Meadows'}`,
+        notes: msg || `Enquiry for Plot ${plot.num} in ${project.name || 'VR Green Meadows'}`,
+        source: 'Website'
+      });
+    } catch (err) {
+      console.warn('[plot-enquiry] API sync warning:', err?.message || err);
+    }
 
     modalContainer.innerHTML = `
       <div class="plot-enquiry-overlay" id="plot-enquiry-overlay">
@@ -916,10 +950,13 @@ export function initPlotMasterPlan(project) {
       return;
     }
 
+    const cleanPlotCode = plot?.num ? 'P' + String(plot.num).replace(/\D/g, '').padStart(2, '0') : (plot?.id || 'P01');
+
     openSiteVisitFlow({
-      id: plot.id,
+      id: cleanPlotCode,
+      propertyCode: cleanPlotCode,
       projectName: project.name || 'VR Green Meadows',
-      unitName: `Plot ${plot.num} (${plot.size} Sq.Yds)`,
+      unitName: `Plot ${plot.num}`,
       location: project.location || 'Shadnagar, Hyderabad',
       price: plot.price,
       priceSub: `(${plot.rate})`,
