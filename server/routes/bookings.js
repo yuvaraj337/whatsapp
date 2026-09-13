@@ -492,7 +492,6 @@ export async function handleBookings(req, pathParts, body = {}) {
       message: 'Thank you! Your enquiry has been received. Our team will contact you shortly.'
     };
 
-    recentSubmissionsCache.set(dedupeKey, { timestamp: now, response: responseData });
     return { status: 201, data: responseData };
   }
 
@@ -554,6 +553,5 @@ export async function handleBookings(req, pathParts, body = {}) {
     message: 'Your site visit request has been received. Our team will review and send a WhatsApp confirmation once approved.'
   };
 
-  recentSubmissionsCache.set(dedupeKey, { timestamp: now, response: responseData });
   return { status: 201, data: responseData };
 }
