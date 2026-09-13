@@ -50,29 +50,30 @@ export function renderStaticPage(title, subtitle, contentHtml, currentPath = '#/
           let whatsappSent = false;
           try {
             const res = await api.createBooking({
+              type: 'enquiry',
               name,
               phone,
               email,
-              date: 'Contact Page Inquiry',
-              time: 'Preferred Slot',
               projectName: `Real Estate Brothers group - ${interest}`,
-              notes: requirement
+              message: requirement,
+              notes: requirement,
+              source: 'Website'
             });
             whatsappSent = Boolean(res?.customerNotification?.sent);
+            contactForm.reset();
+            if (whatsappSent) {
+              showToast(`Thank you, ${name}! Your message has been sent and confirmed via WhatsApp.`);
+            } else {
+              showToast('Message sent! Our property advisor will reach out to you.');
+            }
           } catch (err) {
-            console.warn('[static-contact] enquiry notice:', err?.message || err);
-          }
-
-          contactForm.reset();
-          if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Send Message';
-          }
-
-          if (whatsappSent) {
-            showToast(`Thank you, ${name}! Your message has been sent and confirmed via WhatsApp.`);
-          } else {
-            showToast('Message sent! Our property advisor will reach out to you.');
+            console.error('[static-contact] enquiry error:', err?.message || err);
+            showToast(err?.message || 'Failed to submit enquiry. Please try again.', true);
+          } finally {
+            if (submitBtn) {
+              submitBtn.disabled = false;
+              submitBtn.textContent = 'Send Message';
+            }
           }
         });
       }

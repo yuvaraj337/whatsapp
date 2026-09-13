@@ -383,39 +383,47 @@ export function renderScreen2Form(customProp = null) {
 
     try {
       const res = await api.createBooking({
+        type: 'site_visit',
         name,
         phone: mobile,
         email,
         date,
         time,
         projectName: chosenProject || 'VR Green Meadows (Open Plots - Shadnagar)',
-        unitName: propertyDetails,
+        propertyCode: (propertyDetails || prop?.unitName || '').replace(/Plot\s*#?/i, 'P').trim(),
+        unitName: propertyDetails || prop?.unitName,
         propertyId: prop?.id || null,
-        message: `${message}${propertyDetails && !prop ? ` | Property Details: ${propertyDetails}` : ''} | Transport: ${transport}`
+        message: `${message}${propertyDetails && !prop ? ` | Property Details: ${propertyDetails}` : ''} | Transport: ${transport}`,
+        source: 'Website'
       });
 
       if (res?.customerNotification?.sent) {
         whatsappSent = true;
       }
       bookingReference = res?.reference || '';
-    } catch (apiErr) {
-      console.warn('[booking] API notification warning:', apiErr?.message || apiErr);
-    }
 
-    // Transition to Screen 3: Success Confirmation
-    renderScreen3Success({
-      ...(prop || {}),
-      projectName: chosenProject || 'VR Green Meadows (Open Plots - Shadnagar)',
-      unitName: propertyDetails,
-      location: prop?.location || (chosenProject.includes('Shadnagar') ? 'Shadnagar, Hyderabad' : (chosenProject.includes('Gachibowli') ? 'Gachibowli, Hyderabad' : (chosenProject.includes('Kokapet') ? 'Kokapet, Hyderabad' : 'Hyderabad'))),
-      customerName: name,
-      customerMobile: mobile,
-      customerEmail: email,
-      visitDate: date,
-      visitTime: time,
-      whatsappSent,
-      bookingReference
-    });
+      // Transition to Screen 3: Success Confirmation
+      renderScreen3Success({
+        ...(prop || {}),
+        projectName: chosenProject || 'VR Green Meadows (Open Plots - Shadnagar)',
+        unitName: propertyDetails,
+        location: prop?.location || (chosenProject.includes('Shadnagar') ? 'Shadnagar, Hyderabad' : (chosenProject.includes('Gachibowli') ? 'Gachibowli, Hyderabad' : (chosenProject.includes('Kokapet') ? 'Kokapet, Hyderabad' : 'Hyderabad'))),
+        customerName: name,
+        customerMobile: mobile,
+        customerEmail: email,
+        visitDate: date,
+        visitTime: time,
+        whatsappSent,
+        bookingReference
+      });
+    } catch (apiErr) {
+      console.error('[booking] API notification warning:', apiErr?.message || apiErr);
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Site Visit Request';
+      }
+      alert(apiErr?.message || 'Failed to submit site visit request. Please try again.');
+    }
   });
 }
 
@@ -639,30 +647,40 @@ export function renderEnquiryForm(context = null) {
     let enquiryReference = '';
     try {
       const res = await api.createBooking({
+        type: 'enquiry',
         name,
         phone: mobile,
         email,
-        date: 'Immediate Enquiry',
-        time: 'Preferred Slot',
         projectName: project,
-        notes: msg
+        propertyCode: (context?.unitName || '').replace(/Plot\s*#?/i, 'P').trim(),
+        unitName: context?.unitName || '',
+        propertyId: context?.id || null,
+        propertyType: context?.type || '',
+        message: msg,
+        notes: msg,
+        source: 'Website'
       });
       whatsappSent = Boolean(res?.customerNotification?.sent);
       enquiryReference = res?.reference || '';
-    } catch (err) {
-      console.warn('[enquiry] API call warning:', err?.message || err);
-    }
 
-    renderEnquirySuccess({
-      customerName: name,
-      customerMobile: mobile,
-      customerEmail: email,
-      message: msg,
-      projectName: project,
-      context: context,
-      whatsappSent,
-      enquiryReference
-    });
+      renderEnquirySuccess({
+        customerName: name,
+        customerMobile: mobile,
+        customerEmail: email,
+        message: msg,
+        projectName: project,
+        context: context,
+        whatsappSent,
+        enquiryReference
+      });
+    } catch (err) {
+      console.error('[enquiry] API call error:', err?.message || err);
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Enquiry';
+      }
+      alert(err?.message || 'Failed to submit enquiry. Please try again.');
+    }
   });
 }
 

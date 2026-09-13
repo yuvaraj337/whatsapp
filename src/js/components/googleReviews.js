@@ -1,10 +1,8 @@
 /**
  * Google Reviews Section
- * Strictly displays real Google Reviews via GET /api/google-reviews (Google Places API New).
+ * Strictly displays owner-approved Google / Client Reviews via GET /api/reviews.
  * No customer review submission form anywhere on the website.
  */
-
-import { api } from '../api/client.js';
 
 const GOOGLE_G_ICON = `
 <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -30,25 +28,22 @@ const VERIFIED_CHECK = `
 
 const FALLBACK_REVIEWS = [
   {
-    authorName: 'Ramesh Varma',
-    authorPhoto: '',
+    reviewer_name: 'Ramesh Varma',
     rating: 5,
     relativePublishTimeDescription: '2 weeks ago',
-    text: 'Real Estate Brothers group made purchasing our open plot in Shadnagar completely seamless. Clear title deeds, fast registration, and immediate spot physical possession. Highly transparent and recommended!'
+    review_text: 'Real Estate Brothers group made purchasing our open plot in Shadnagar completely seamless. Clear title deeds, fast registration, and immediate spot physical possession. Highly transparent and recommended!'
   },
   {
-    authorName: 'Deepa Reddy',
-    authorPhoto: '',
+    reviewer_name: 'Deepa Reddy',
     rating: 5,
     relativePublishTimeDescription: 'a month ago',
-    text: 'Visited VR Elite Towers at Kokapet. The 3 BHK architectural plan, floor layouts, and amenities are truly world-class. The sales executives explained every detail with complete patience.'
+    review_text: 'Visited VR Elite Towers at Kokapet. The 3 BHK architectural plan, floor layouts, and amenities are truly world-class. The sales executives explained every detail with complete patience.'
   },
   {
-    authorName: 'K. Srinivasa Rao',
-    authorPhoto: '',
+    reviewer_name: 'K. Srinivasa Rao',
     rating: 5,
     relativePublishTimeDescription: '2 months ago',
-    text: 'We bought a managed farmland at Nature’s Nest. Sandalwood maintenance, drip irrigation, and club house access are exceptional. Very reliable team led by true professionals.'
+    review_text: 'We bought a managed farmland at Nature’s Nest. Sandalwood maintenance, drip irrigation, and club house access are exceptional. Very reliable team led by true professionals.'
   }
 ];
 
@@ -82,16 +77,16 @@ export function renderGoogleReviews() {
           
           <div class="google-cta-col">
             <a 
-              href="https://search.google.com/local/writereview?placeid=ChIJdefault" 
+              href="https://www.google.com/maps/search/?api=1&query=VR+Real+Estates+Hyderabad" 
               target="_blank" 
               rel="noopener noreferrer" 
               class="google-write-btn" 
               id="google-write-btn"
             >
               ${GOOGLE_G_ICON}
-              <span>Write a Review on Google</span>
+              <span>View Google Business Profile</span>
             </a>
-            <div class="google-policy-note">Reviews are authenticated through Google Accounts.</div>
+            <div class="google-policy-note">Verified ratings from Google Business Profile.</div>
           </div>
         </div>
 
@@ -122,33 +117,34 @@ function renderReviewCards(reviews) {
   if (!reviews || reviews.length === 0) {
     return `
       <div class="google-empty-state">
-        <p>We welcome your feedback! Visit us on Google Maps to leave a verified review.</p>
-        <a href="https://search.google.com/local/writereview?placeid=ChIJdefault" target="_blank" rel="noopener" class="google-write-btn">
-          ${GOOGLE_G_ICON}
-          <span>Review Us on Google</span>
-        </a>
+        <p>Verified client reviews will appear here once approved by management.</p>
       </div>
     `;
   }
 
   return reviews.map((r, i) => {
-    const stars = Array(Math.min(5, Math.max(1, Math.round(r.rating || 5))))
+    const authorName = r.reviewer_name || r.authorName || 'Google User';
+    const rating = Number(r.rating) || 5;
+    const text = r.review_text || r.text || '';
+    const dateLabel = r.relativePublishTimeDescription || (r.review_date ? new Date(r.review_date).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : 'Verified Review');
+
+    const stars = Array(Math.min(5, Math.max(1, Math.round(rating))))
       .fill(STAR_ICON)
       .join('');
     
-    const initials = (r.authorName || 'Google User')
+    const initials = authorName
       .split(' ')
-      .map(n => n[0])
+      .map((n) => n[0])
       .slice(0, 2)
       .join('')
-      .toUpperCase();
+      .toUpperCase() || 'GU';
 
     const avatarHtml = r.authorPhoto 
-      ? `<img src="${r.authorPhoto}" alt="${r.authorName}" class="rev-avatar-img" />`
+      ? `<img src="${r.authorPhoto}" alt="${authorName}" class="rev-avatar-img" />`
       : `<div class="rev-avatar-fallback">${initials}</div>`;
 
-    const isLong = (r.text || '').length > 180;
-    const shortText = isLong ? r.text.slice(0, 180) + '...' : r.text;
+    const isLong = text.length > 180;
+    const shortText = isLong ? text.slice(0, 180) + '...' : text;
 
     return `
       <div class="google-rev-card">
@@ -157,13 +153,13 @@ function renderReviewCards(reviews) {
             ${avatarHtml}
             <div>
               <div class="rev-author-name">
-                <span>${r.authorName}</span>
-                <span title="Verified Google Review">${VERIFIED_CHECK}</span>
+                <span>${authorName}</span>
+                <span title="Verified Review">${VERIFIED_CHECK}</span>
               </div>
-              <div class="rev-date">${r.relativePublishTimeDescription || 'Recently'}</div>
+              <div class="rev-date">${dateLabel}</div>
             </div>
           </div>
-          <div class="rev-google-badge" title="Verified Google Review">
+          <div class="rev-google-badge" title="Verified Review">
             ${GOOGLE_G_ICON}
           </div>
         </div>
@@ -175,8 +171,24 @@ function renderReviewCards(reviews) {
         <div class="rev-text-wrap" id="rev-text-${i}">
           <p class="rev-text">${shortText}</p>
           ${isLong ? `
-            <button type="button" class="rev-read-more-btn" onclick="window._toggleRevText(${i}, '${encodeURIComponent(r.text)}')">Read more</button>
+            <button 
+              type="button" 
+              class="rev-read-more" 
+              onclick="window._toggleRevText(${i}, '${encodeURIComponent(text)}')"
+            >
+              Read more
+            </button>
           ` : ''}
+        </div>
+
+        <div class="rev-card-foot">
+          <div class="rev-verified-pill">
+            ${VERIFIED_CHECK}
+            <span>Verified Customer</span>
+          </div>
+          <div class="rev-posted-on">
+            <span>Source: ${r.source || 'Google'}</span>
+          </div>
         </div>
       </div>
     `;
@@ -194,37 +206,34 @@ export async function initGoogleReviews() {
   };
 
   try {
-    const res = await fetch('/api/google-reviews');
-    if (!res.ok) return;
-    const json = await res.json();
-    const data = json?.data;
-    if (!data) return;
-
-    if (data.rating) {
-      const scoreEl = document.getElementById('google-score-val');
-      if (scoreEl) scoreEl.textContent = Number(data.rating).toFixed(1);
-    }
-
-    if (data.totalRatings) {
-      const totalEl = document.getElementById('google-total-reviews');
-      if (totalEl) totalEl.textContent = `${data.totalRatings}+`;
-    }
-
-    if (data.placeId) {
-      const writeBtn = document.getElementById('google-write-btn');
-      if (writeBtn) {
-        writeBtn.href = `https://search.google.com/local/writereview?placeid=${data.placeId}`;
-      }
-      const viewAllLink = document.getElementById('google-view-all-link');
-      if (viewAllLink) {
-        viewAllLink.href = `https://www.google.com/maps/place/?q=place_id:${data.placeId}`;
+    // 1. Prioritize owner-approved reviews from /api/reviews
+    const res = await fetch('/api/reviews');
+    if (res.ok) {
+      const json = await res.json();
+      const approved = json?.data?.reviews;
+      if (Array.isArray(approved) && approved.length > 0) {
+        const cardsContainer = document.getElementById('google-reviews-cards');
+        if (cardsContainer) {
+          cardsContainer.innerHTML = renderReviewCards(approved);
+        }
+        if (json?.data?.averageRating) {
+          const scoreEl = document.getElementById('google-score-val');
+          if (scoreEl) scoreEl.textContent = json.data.averageRating;
+        }
+        const totalEl = document.getElementById('google-total-reviews');
+        if (totalEl) totalEl.textContent = `${approved.length}+`;
+        return;
       }
     }
 
-    if (data.reviews && data.reviews.length > 0) {
-      const cardsContainer = document.getElementById('google-reviews-cards');
-      if (cardsContainer) {
-        cardsContainer.innerHTML = renderReviewCards(data.reviews);
+    // 2. Fallback to /api/google-reviews
+    const gRes = await fetch('/api/google-reviews');
+    if (gRes.ok) {
+      const gJson = await gRes.json();
+      const gData = gJson?.data;
+      if (gData?.reviews && gData.reviews.length > 0) {
+        const cardsContainer = document.getElementById('google-reviews-cards');
+        if (cardsContainer) cardsContainer.innerHTML = renderReviewCards(gData.reviews);
       }
     }
   } catch (err) {

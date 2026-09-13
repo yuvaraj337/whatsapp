@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { handleWhatsApp } from './routes/whatsapp.js';
 import { handleBookings } from './routes/bookings.js';
 import { handleGoogleReviews } from './routes/googleReviews.js';
+import { handlePublicReviews } from './routes/reviews.js';
 
 const PORT = Number(process.env.API_PORT || 3001);
 
@@ -544,6 +545,13 @@ export async function router(req, res) {
 
     if (!result) {
       result = await handleGoogleReviews(
+        req,
+        pathParts
+      );
+    }
+
+    if (!result) {
+      result = await handlePublicReviews(
         req,
         pathParts
       );

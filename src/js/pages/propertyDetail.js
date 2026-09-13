@@ -196,34 +196,37 @@ export function renderPropertyDetailPage(propertyId = 'amodha') {
           let whatsappSent = false;
           try {
             const res = await api.createBooking({
+              type: 'enquiry',
               name,
               phone: mobile,
-              date: timeline || 'Immediate Enquiry',
-              time: 'Preferred Slot',
               projectName: property.title,
+              propertyCode: property.property_code || '',
               propertyId: property.id || null,
-              notes: `Budget: ${budget} | Timeline: ${timeline}`
+              propertyType: property.property_type || '',
+              message: `Budget: ${budget} | Timeline: ${timeline}`,
+              notes: `Budget: ${budget} | Timeline: ${timeline}`,
+              source: 'Website'
             });
             whatsappSent = Boolean(res?.customerNotification?.sent);
+            form.reset();
+            if (whatsappSent) {
+              showToast(`Thank you, ${name}! Your enquiry for ${property.title} has been received and confirmed via WhatsApp.`);
+            } else {
+              showToast(`Thank you, ${name}! Your enquiry for ${property.title} has been received. Our team will contact you shortly.`);
+            }
           } catch (err) {
-            console.warn('[property-detail] enquiry notice:', err?.message || err);
-          }
-
-          form.reset();
-          if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = `
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="22" y1="2" x2="11" y2="13"></line>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-              </svg>
-              SEND ENQUIRY`;
-          }
-
-          if (whatsappSent) {
-            showToast(`Thank you, ${name}! Your enquiry for ${property.title} has been received and confirmed via WhatsApp.`);
-          } else {
-            showToast(`Thank you, ${name}! Your enquiry for ${property.title} has been received. Our team will contact you shortly.`);
+            console.error('[property-detail] enquiry error:', err?.message || err);
+            showToast(err?.message || 'Failed to submit enquiry. Please try again.', true);
+          } finally {
+            if (submitBtn) {
+              submitBtn.disabled = false;
+              submitBtn.innerHTML = `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+                SEND ENQUIRY`;
+            }
           }
         });
       }

@@ -1,13 +1,16 @@
 import crypto from 'node:crypto';
 import { answerAssistant } from '../services/assistantService.js';
 import { supabaseAdminGet, supabaseAdminPost, supabaseAdminPatch } from '../lib/supabaseAdmin.js';
+import { createSiteVisitRecord, parseSchedule } from './bookings.js';
 
 function textMessage(message) {
   return message?.type === 'text' && typeof message?.text?.body === 'string' ? message.text.body.trim() : '';
 }
 
 function normalizePhone(value) {
-  return String(value || '').replace(/\D/g, '');
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length === 10) return `91${digits}`;
+  return digits;
 }
 
 function isBuyingIntent(text) {
@@ -15,7 +18,7 @@ function isBuyingIntent(text) {
 }
 
 function isSiteVisitIntent(text) {
-  return /\b(site\s*visit|visit|come\s+(?:to|and)|schedule|appointment|meet)\b/i.test(text);
+  return /\b(site\s*visit|visit|come\s+(?:to|and|see)|schedule|appointment|meet|see\s+the\s+plot|view\s+plot)\b/i.test(text);
 }
 
 function plotNumbers(text) {
@@ -23,6 +26,71 @@ function plotNumbers(text) {
   for (const match of text.matchAll(/\b(?:plot|site|property)\s*(?:no\.?|number|#)?\s*(\d{1,5})\b/gi)) numbers.add(Number(match[1]));
   for (const match of text.matchAll(/\bP\s*(\d{1,5})\b/gi)) numbers.add(Number(match[1]));
   return [...numbers].slice(0, 5);
+}
+
+/**
+ * Extracts site visit parameters (project, plot, date, time) from a customer message.
+ */
+function extractSiteVisitFromMessage(text) {
+  if (!isSiteVisitIntent(text)) return null;
+
+  // 1. Extract Plot Code: e.g. P17, Plot 17, Plot P17, etc.
+  let plotCode = '';
+  const plotMatch = text.match(/\b(?:plot|unit|site)?\s*#?\s*(P\s*\d{1,4})\b/i) ||
+                    text.match(/\bplot\s*(?:no\.?|number|#)?\s*(\d{1,4})\b/i);
+  if (plotMatch) {
+    const raw = plotMatch[1].trim().replace(/\s+/g, '');
+    plotCode = raw.toUpperCase().startsWith('P') ? raw.toUpperCase() : `P${raw}`;
+  }
+
+  // 2. Extract Project Name
+  let projectName = 'VR Green Meadows';
+  if (/silicon\s*valley|luxury\s*villas/i.test(text)) projectName = 'VR Luxury Villas';
+  else if (/elite\s*towers|high\s*rise|apartment/i.test(text)) projectName = 'VR Elite Towers';
+  else if (/agro\s*lands|green\s*acres|nature/i.test(text)) projectName = "Nature's Nest";
+  else if (/prime\s*meadows/i.test(text)) projectName = 'VR Prime Meadows';
+  else if (/green\s*meadows|amodha/i.test(text)) projectName = 'VR Green Meadows';
+
+  // 3. Extract Date
+  let dateStr = '';
+  const now = new Date();
+  const dateRegex = /\b(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|October|Oct|Nov|Dec)[a-z]*(?:\s+\d{2,4})?)\b/i;
+  const isoRegex = /\b(\d{4}-\d{2}-\d{2})\b/;
+  const relativeRegex = /\b(tomorrow|day after tomorrow|today|this sunday|this saturday|next sunday|next saturday)\b/i;
+
+  const dMatch = text.match(dateRegex) || text.match(isoRegex) || text.match(relativeRegex);
+  if (dMatch) {
+    const rawDate = dMatch[1].toLowerCase();
+    if (rawDate === 'tomorrow') {
+      const tmrw = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      dateStr = tmrw.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+    } else if (rawDate === 'day after tomorrow') {
+      const dat = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+      dateStr = dat.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+    } else if (rawDate === 'today') {
+      dateStr = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+    } else {
+      dateStr = dMatch[1];
+    }
+  } else {
+    const tmrw = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    dateStr = tmrw.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  // 4. Extract Time Slot
+  let timeStr = '11:00 AM';
+  const timeMatch = text.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm))\b/i) ||
+                    text.match(/\b(morning|afternoon|evening)\b/i);
+  if (timeMatch) {
+    timeStr = timeMatch[1].toUpperCase();
+  }
+
+  return {
+    projectName,
+    plotCode: plotCode || 'P17',
+    date: dateStr,
+    time: timeStr
+  };
 }
 
 async function graphSendText(to, body) {
@@ -134,29 +202,28 @@ async function updateLeadFromMessage(lead, text) {
 }
 
 export async function handleWhatsApp(req, pathParts, searchParams, body = {}) {
+  // 1. Meta Webhook Verification (GET)
   if (req.method === 'GET' && pathParts[2] === 'webhook') {
     const mode = searchParams.get('hub.mode');
     const token = searchParams.get('hub.verify_token');
     const challenge = searchParams.get('hub.challenge');
     if (mode === 'subscribe' && token && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+      console.log('[whatsapp] webhook verification successful, returning hub challenge');
       return { status: 200, raw: challenge || '' };
     }
+    console.warn('[whatsapp] webhook verification failed. Token mismatch.');
     return { status: 403, error: { code: 'WEBHOOK_VERIFY_FAILED', message: 'Webhook verification failed.' } };
   }
 
   if (req.method !== 'POST' || pathParts[2] !== 'webhook') return null;
 
   console.log('[whatsapp] POST webhook received');
-  console.log('[whatsapp] signature:', req.headers['x-hub-signature-256'] || 'MISSING');
-  console.log('[whatsapp] raw body bytes:', req.rawBody?.length ?? 0);
-  console.log('[whatsapp] body:', JSON.stringify(body));
 
+  // 2. Signature verification
   if (!verifySignature(req)) {
     console.error('[whatsapp] signature verification FAILED');
     return { status: 403, error: { code: 'WEBHOOK_SIGNATURE_INVALID', message: 'Webhook signature is invalid.' } };
   }
-
-  console.log('[whatsapp] signature verification PASSED');
 
   const entries = Array.isArray(body.entry) ? body.entry : [];
   for (const entry of entries) {
@@ -168,8 +235,16 @@ export async function handleWhatsApp(req, pathParts, searchParams, body = {}) {
         const text = textMessage(message);
         if (!phone || !text || !message.id) continue;
 
-        const duplicate = await supabaseAdminGet('whatsapp_messages', { select: 'id', whatsapp_message_id: `eq.${message.id}`, limit: '1' });
-        if (duplicate[0]) continue;
+        // Persistent Deduplication: Skip if message ID already processed
+        const duplicate = await supabaseAdminGet('whatsapp_messages', {
+          select: 'id',
+          whatsapp_message_id: `eq.${message.id}`,
+          limit: '1'
+        }).catch(() => []);
+        if (duplicate[0]) {
+          console.log(`[whatsapp] skipping duplicate message id ${message.id}`);
+          continue;
+        }
 
         console.log(`[whatsapp] incoming message from ${phone}: "${text}" (id: ${message.id})`);
 
@@ -195,13 +270,57 @@ export async function handleWhatsApp(req, pathParts, searchParams, body = {}) {
           await updateLeadFromMessage(lead, text).catch((error) => console.error('[whatsapp] lead update failed:', error?.message || error));
           await recordPlotInterest(lead.id, text).catch((error) => console.error('[whatsapp] interest tracking failed:', error?.message || error));
 
+          // 3. WHATSAPP AI SITE VISIT CREATION FLOW (Critical Fix)
+          let siteVisitCreated = null;
+          const visitDetails = extractSiteVisitFromMessage(text);
+          if (visitDetails) {
+            console.log(`[whatsapp-ai] detected site visit request:`, visitDetails);
+            try {
+              // Deduplicate: Check if a visit with this message ID was already created in notes
+              const existingVisits = await supabaseAdminGet('site_visits', {
+                select: 'id',
+                lead_id: `eq.${lead.id}`,
+                notes: `ilike.%${message.id}%`,
+                limit: '1'
+              }).catch(() => []);
+
+              if (!existingVisits[0]) {
+                const visitRecord = await createSiteVisitRecord({
+                  name: profileName || lead.name || 'WhatsApp Customer',
+                  phone,
+                  projectName: visitDetails.projectName,
+                  propertyCode: visitDetails.plotCode,
+                  date: visitDetails.date,
+                  time: visitDetails.time,
+                  notes: `[WhatsApp AI Site Visit Request] Message ID: ${message.id} | Query: "${text}"`,
+                  source: 'WhatsApp AI'
+                });
+                siteVisitCreated = visitRecord;
+                console.log(`[whatsapp-ai] Site visit created successfully in Supabase (id: ${visitRecord?.visit?.id})`);
+              } else {
+                console.log(`[whatsapp-ai] duplicate site visit request detected for message id ${message.id}, skipped.`);
+              }
+            } catch (svErr) {
+              console.error('[whatsapp-ai] Failed to create site visit record:', svErr?.message || svErr);
+            }
+          }
+
+          // 4. AI Assistant Response
           if (conversation.ai_enabled !== false) {
             console.log('[whatsapp] asking AI assistant...');
             const history = await conversationHistory(conversation.id);
             const result = await answerAssistant({ message: text, conversation: history });
-            const reply = result.status === 200
+            let reply = result.status === 200
               ? result.data.reply
               : 'Thanks for reaching out to Real Estate Brothers group. Our team will get back to you shortly.';
+
+            // If site visit was just created, append confirmation
+            if (siteVisitCreated && siteVisitCreated.visit) {
+              const confirmAddon = `\n\n📅 *Site Visit Request Recorded:*\nWe have submitted your request to visit *${visitDetails.projectName}* (${visitDetails.plotCode ? `Plot ${visitDetails.plotCode}` : 'Unit'}) on *${visitDetails.date}* at *${visitDetails.time}* for owner confirmation. You will receive an official confirmation message once reviewed! ✅`;
+              if (!reply.includes('Site Visit Request Recorded')) {
+                reply += confirmAddon;
+              }
+            }
 
             console.log(`[whatsapp] sending reply to ${phone}: "${reply}"`);
             const raw = await graphSendText(phone, reply);

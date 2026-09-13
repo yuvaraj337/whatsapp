@@ -73,7 +73,9 @@ const S = {
   selectedPlotId: 'P17',
   inventoryViewMode: 'plan',
   activePlotDetail: null,
-  plotHistory: []
+  plotHistory: [],
+  reviews: [],
+  reviewFilter: 'ALL'
 };
 let timer = null;
 
@@ -155,6 +157,7 @@ function shell(bodyContent) {
     ['visits', 'Site Visits', '⌖'],
     ['inventory', 'Inventory', '▤'],
     ['bookings', 'Bookings', '✓'],
+    ['reviews', 'Reviews', '★'],
     ['reminders', 'Reminders', '⏰']
   ];
 
@@ -166,6 +169,7 @@ function shell(bodyContent) {
     visits: 'Review site visit requests. Confirming a visit NEVER modifies plot inventory.',
     inventory: 'Interactive Master Plan and live plot status control with full manual owner authority.',
     bookings: 'Track confirmed plot bookings, advance payments, and customer records.',
+    reviews: 'Manage and approve customer reviews and Google ratings displayed on the public website.',
     reminders: 'Configure automated WhatsApp site visit reminder rules.'
   };
 
@@ -186,6 +190,7 @@ function shell(bodyContent) {
               <span>${n[1]}</span>
               ${n[0] === 'visits' && S.summary?.siteVisitRequests ? `<em>${S.summary.siteVisitRequests}</em>` : ''}
               ${n[0] === 'enquiries' && S.leads.filter((l) => (l.status || 'new') === 'new').length ? `<em>${S.leads.filter((l) => (l.status || 'new') === 'new').length}</em>` : ''}
+              ${n[0] === 'reviews' && S.summary?.pendingReviews ? `<em>${S.summary.pendingReviews}</em>` : ''}
             </button>
           `).join('')}
         </nav>
@@ -595,12 +600,21 @@ function inbox() {
 }
 
 function visits() {
-  const rows = S.visits.filter((v) => S.visitFilter === 'ALL' || v.status === S.visitFilter);
+  const rows = S.visits.filter((v) => {
+    if (S.visitFilter === 'ALL') return true;
+    if (S.visitFilter === 'PENDING' && (v.status === 'REQUESTED' || v.status === 'PENDING')) return true;
+    return v.status === S.visitFilter;
+  });
+
   return `
     <div class="crm-toolbar">
       <select id="visit-filter">
         <option value="ALL">All visit statuses</option>
-        ${VISIT_STATUSES.map((x) => `<option value="${x}" ${S.visitFilter === x ? 'selected' : ''}>${label(x)}</option>`).join('')}
+        <option value="PENDING" ${S.visitFilter === 'PENDING' ? 'selected' : ''}>Pending Review</option>
+        <option value="CONFIRMED" ${S.visitFilter === 'CONFIRMED' ? 'selected' : ''}>Confirmed</option>
+        <option value="RESCHEDULED" ${S.visitFilter === 'RESCHEDULED' ? 'selected' : ''}>Rescheduled</option>
+        <option value="COMPLETED" ${S.visitFilter === 'COMPLETED' ? 'selected' : ''}>Completed</option>
+        <option value="CANCELLED" ${S.visitFilter === 'CANCELLED' ? 'selected' : ''}>Cancelled / Rejected</option>
       </select>
       <button class="crm-primary" id="add-visit">+ Site visit request</button>
     </div>
@@ -617,42 +631,62 @@ function visits() {
             <tr>
               <th>Customer</th>
               <th>Property</th>
+              <th>Source</th>
               <th>Requested</th>
               <th>Scheduled</th>
               <th>Status</th>
+              <th>Notes</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
-            ${rows.map((v) => `
-              <tr>
-                <td>
-                  <div class="crm-person">
-                    <span>${initials(v.leads?.name)}</span>
-                    <div>
-                      <b>${esc(v.leads?.name || 'Unknown')}</b>
-                      <small>${esc(v.leads?.phone || '')}</small>
+            ${rows.map((v) => {
+              const src = v.source || (v.notes && v.notes.includes('WhatsApp') ? 'WhatsApp AI' : 'Website');
+              const displayStatus = v.status === 'REQUESTED' ? 'PENDING' : v.status;
+              const statusClass = displayStatus === 'PENDING' ? 'status-hold' : cls(v.status);
+
+              return `
+                <tr>
+                  <td>
+                    <div class="crm-person">
+                      <span>${initials(v.leads?.name)}</span>
+                      <div>
+                        <b>${esc(v.leads?.name || 'Unknown')}</b>
+                        <small>
+                          <a href="https://wa.me/${String(v.leads?.phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" style="color: #128C7E; font-weight: 600; text-decoration: none;">
+                            ${esc(v.leads?.phone || '—')} 💬
+                          </a>
+                        </small>
+                      </div>
                     </div>
-                  </div>
-                </td>
-                <td>
-                  <b>${esc(v.properties?.title || v.properties?.property_code || '—')}</b>
-                  <small class="crm-cell-sub">${esc(v.properties?.projects?.name || '')}</small>
-                </td>
-                <td>${date(v.requested_at)}</td>
-                <td>${date(v.scheduled_at)}</td>
-                <td><span class="crm-badge ${cls(v.status)}">${label(v.status)}</span></td>
-                <td>
-                  ${v.status === 'REQUESTED' || v.status === 'RESCHEDULED' ? `
-                    <button class="crm-action success" data-confirm-visit="${v.id}">Confirm</button>
-                    <button class="crm-action danger" data-cancel-visit="${v.id}">Cancel</button>
-                  ` : v.status === 'CONFIRMED' ? `
-                    <button class="crm-action" data-complete-visit="${v.id}">Complete</button>
-                    <button class="crm-action" data-reschedule-visit="${v.id}">Reschedule</button>
-                  ` : '—'}
-                </td>
-              </tr>
-            `).join('') || `<tr><td colspan="6"><div class="crm-empty">No site visits.</div></td></tr>`}
+                  </td>
+                  <td>
+                    <b>${esc(v.properties?.title || v.properties?.property_code || '—')}</b>
+                    <small class="crm-cell-sub">${esc(v.properties?.projects?.name || '')}</small>
+                  </td>
+                  <td>
+                    <span class="crm-badge" style="${src === 'WhatsApp AI' ? 'background:#dcfce7; color:#15803d;' : 'background:#e0f2fe; color:#0369a1;'}">
+                      ${esc(src)}
+                    </span>
+                  </td>
+                  <td>${date(v.requested_at)}</td>
+                  <td><b>${date(v.scheduled_at)}</b></td>
+                  <td><span class="crm-badge ${statusClass}">${displayStatus}</span></td>
+                  <td style="max-width: 220px; white-space: normal; font-size: 12px; line-height: 1.4;">${esc(v.notes || '—')}</td>
+                  <td>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                      ${v.status === 'REQUESTED' || v.status === 'RESCHEDULED' ? `
+                        <button class="crm-action success" data-confirm-visit="${v.id}" title="Confirm site visit & send WhatsApp to customer">Confirm</button>
+                        <button class="crm-action danger" data-cancel-visit="${v.id}" title="Reject site visit">Reject</button>
+                      ` : v.status === 'CONFIRMED' ? `
+                        <button class="crm-action" data-complete-visit="${v.id}">Complete</button>
+                        <button class="crm-action" data-reschedule-visit="${v.id}">Reschedule</button>
+                      ` : '—'}
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join('') || `<tr><td colspan="8"><div class="crm-empty">No site visits.</div></td></tr>`}
           </tbody>
         </table>
       </div>
@@ -1107,6 +1141,171 @@ function reminders() {
   `;
 }
 
+function reviews() {
+  const q = S.search.toLowerCase();
+  const rows = S.reviews.filter((r) => {
+    if (S.reviewFilter !== 'ALL') {
+      if (S.reviewFilter === 'SHOW' && !r.is_visible) return false;
+      if (S.reviewFilter === 'HIDE' && r.is_visible) return false;
+      if (S.reviewFilter !== 'SHOW' && S.reviewFilter !== 'HIDE' && r.status !== S.reviewFilter) return false;
+    }
+    if (q && ![r.reviewer_name, r.review_text, r.project_name, r.source].some((v) => String(v || '').toLowerCase().includes(q))) {
+      return false;
+    }
+    return true;
+  });
+
+  const totalCount = S.reviews.length;
+  const pendingCount = S.reviews.filter((r) => r.status === 'PENDING').length;
+  const approvedCount = S.reviews.filter((r) => r.status === 'APPROVED' && r.is_visible).length;
+  const hiddenCount = S.reviews.filter((r) => r.status === 'HIDDEN' || !r.is_visible).length;
+
+  return `
+    <div class="crm-toolbar">
+      <div class="crm-search">
+        <span>⌕</span>
+        <input id="review-search" value="${esc(S.search)}" placeholder="Search reviewer, text, or project…">
+      </div>
+      <select id="review-filter">
+        <option value="ALL" ${S.reviewFilter === 'ALL' ? 'selected' : ''}>All Reviews (${totalCount})</option>
+        <option value="PENDING" ${S.reviewFilter === 'PENDING' ? 'selected' : ''}>Pending Approval (${pendingCount})</option>
+        <option value="APPROVED" ${S.reviewFilter === 'APPROVED' ? 'selected' : ''}>Approved &amp; Live (${approvedCount})</option>
+        <option value="HIDDEN" ${S.reviewFilter === 'HIDDEN' ? 'selected' : ''}>Hidden (${hiddenCount})</option>
+      </select>
+      <button class="crm-primary" id="sync-google-reviews">↻ Sync Google Reviews</button>
+    </div>
+
+    <div class="crm-overview-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 20px;">
+      <article class="crm-stat">
+        <div class="crm-stat-icon">★</div>
+        <div>
+          <span>Total Reviews</span>
+          <strong>${totalCount}</strong>
+          <small>Google &amp; Direct Sources</small>
+        </div>
+      </article>
+      <article class="crm-stat">
+        <div class="crm-stat-icon" style="color: #f59e0b;">⏳</div>
+        <div>
+          <span>Pending Approval</span>
+          <strong style="color: #d97706;">${pendingCount}</strong>
+          <small>Awaiting Owner Approval</small>
+        </div>
+      </article>
+      <article class="crm-stat">
+        <div class="crm-stat-icon" style="color: #10b981;">✓</div>
+        <div>
+          <span>Live on Website</span>
+          <strong style="color: #059669;">${approvedCount}</strong>
+          <small>Approved &amp; Visible</small>
+        </div>
+      </article>
+      <article class="crm-stat">
+        <div class="crm-stat-icon" style="color: #6b7280;">👁</div>
+        <div>
+          <span>Hidden</span>
+          <strong>${hiddenCount}</strong>
+          <small>Suppressed from Public</small>
+        </div>
+      </article>
+    </div>
+
+    <section class="crm-card">
+      <div class="crm-card-head">
+        <div>
+          <h2>Review Approval Management</h2>
+          <p>Only reviews marked as <strong>APPROVED</strong> and <strong>SHOW</strong> appear on the public website. Customers cannot submit reviews publicly.</p>
+        </div>
+      </div>
+      <div class="crm-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Reviewer</th>
+              <th>Rating</th>
+              <th>Review Text</th>
+              <th>Project / Unit</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Website Visibility</th>
+              <th>Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="reviews-table-body">
+            ${renderReviewRows(rows)}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function renderReviewRows(rows) {
+  if (!rows.length) {
+    return `<tr><td colspan="9"><div class="crm-empty">No reviews match your filter.</div></td></tr>`;
+  }
+  return rows.map((r) => {
+    const isApproved = r.status === 'APPROVED';
+    const isVisible = Boolean(r.is_visible);
+    const starStr = '★'.repeat(Math.min(5, Math.max(1, r.rating || 5))) + '☆'.repeat(Math.max(0, 5 - Math.min(5, Math.max(1, r.rating || 5))));
+
+    return `
+      <tr>
+        <td>
+          <div class="crm-person">
+            <span>${initials(r.reviewer_name)}</span>
+            <div>
+              <b>${esc(r.reviewer_name || 'Google User')}</b>
+              <small>${esc(r.source || 'Google')}</small>
+            </div>
+          </div>
+        </td>
+        <td style="color: #f59e0b; font-weight: 700; white-space: nowrap;">
+          ${starStr} <small style="color:#6b7280;">(${r.rating || 5}/5)</small>
+        </td>
+        <td style="max-width: 280px; white-space: normal; line-height: 1.45; font-size: 13px;">
+          ${esc(r.review_text || '')}
+        </td>
+        <td>
+          <b>${esc(r.project_name || 'VR Real Estates')}</b>
+          ${r.property_code ? `<small class="crm-cell-sub">Plot ${esc(r.property_code)}</small>` : ''}
+        </td>
+        <td>
+          <span class="crm-badge" style="background:#e0f2fe; color:#0369a1;">${esc(r.source || 'Google')}</span>
+        </td>
+        <td>
+          <span class="crm-badge ${cls(r.status)}">${label(r.status)}</span>
+        </td>
+        <td>
+          <span class="crm-badge" style="${isVisible ? 'background:#dcfce7; color:#15803d;' : 'background:#fee2e2; color:#b91c1c;'}">
+            ${isVisible ? '● SHOW' : '○ HIDE'}
+          </span>
+        </td>
+        <td>${date(r.review_date || r.created_at)}</td>
+        <td>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            ${!isApproved || !isVisible ? `
+              <button class="crm-small-btn" data-review-approve="${r.id}" style="background:#dcfce7; border-color:#22c55e; color:#15803d; font-weight:600;">
+                ✓ Approve &amp; Show
+              </button>
+            ` : ''}
+            ${isVisible ? `
+              <button class="crm-small-btn" data-review-hide="${r.id}" style="background:#fee2e2; border-color:#ef4444; color:#b91c1c;">
+                Hide
+              </button>
+            ` : `
+              <button class="crm-small-btn" data-review-show="${r.id}">
+                Show
+              </button>
+            `}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
 function body() {
   return ({
     overview,
@@ -1116,18 +1315,20 @@ function body() {
     visits,
     inventory,
     bookings,
+    reviews,
     reminders
   }[S.tab] || overview)();
 }
 
 async function load() {
-  const [a, b, c, d, e, f] = await Promise.all([
+  const [a, b, c, d, e, f, g] = await Promise.all([
     api('/api/crm/summary'),
     api('/api/crm/leads'),
     api('/api/crm/conversations'),
     api('/api/crm/site-visits'),
     api('/api/crm/inventory'),
-    api('/api/crm/bookings')
+    api('/api/crm/bookings'),
+    api('/api/crm/reviews').catch(() => ({ reviews: [] }))
   ]);
   S.summary = a;
   S.leads = b.leads || [];
@@ -1135,6 +1336,7 @@ async function load() {
   S.visits = d.visits || [];
   S.inventory = e.properties || [];
   S.bookings = f.bookings || [];
+  S.reviews = g.reviews || [];
 
   // If active plot is open, keep it updated
   if (S.activePlotDetail) {
@@ -1435,6 +1637,56 @@ function bindEnquiryActions() {
   });
 }
 
+function bindReviewActions() {
+  document.querySelectorAll('[data-review-approve]').forEach((btn) => {
+    btn.onclick = async () => {
+      try {
+        await api(`/api/crm/reviews/${btn.dataset.reviewApprove}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'APPROVED', is_visible: true })
+        });
+        showToast('Review approved & visible on website.');
+        await load();
+        render();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    };
+  });
+
+  document.querySelectorAll('[data-review-hide]').forEach((btn) => {
+    btn.onclick = async () => {
+      try {
+        await api(`/api/crm/reviews/${btn.dataset.reviewHide}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ is_visible: false })
+        });
+        showToast('Review hidden from website.');
+        await load();
+        render();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    };
+  });
+
+  document.querySelectorAll('[data-review-show]').forEach((btn) => {
+    btn.onclick = async () => {
+      try {
+        await api(`/api/crm/reviews/${btn.dataset.reviewShow}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ is_visible: true })
+        });
+        showToast('Review is now visible on website.');
+        await load();
+        render();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    };
+  });
+}
+
 function bind() {
   // Navigation tabs
   document.querySelectorAll('[data-tab]').forEach((x) => {
@@ -1496,11 +1748,29 @@ function bind() {
         tbody.innerHTML = renderEnquiryRows(filtered);
         bindEnquiryActions();
       }
+    } else if (S.tab === 'reviews') {
+      const tbody = document.getElementById('reviews-table-body');
+      const filtered = S.reviews.filter((r) => {
+        if (S.reviewFilter !== 'ALL') {
+          if (S.reviewFilter === 'SHOW' && !r.is_visible) return false;
+          if (S.reviewFilter === 'HIDE' && r.is_visible) return false;
+          if (S.reviewFilter !== 'SHOW' && S.reviewFilter !== 'HIDE' && r.status !== S.reviewFilter) return false;
+        }
+        if (q && ![r.reviewer_name, r.review_text, r.project_name, r.source].some((v) => String(v || '').toLowerCase().includes(q))) {
+          return false;
+        }
+        return true;
+      });
+      if (tbody) {
+        tbody.innerHTML = renderReviewRows(filtered);
+        bindReviewActions();
+      }
     }
   };
 
   document.getElementById('lead-search')?.addEventListener('input', handleSearchInput);
   document.getElementById('enquiry-search')?.addEventListener('input', handleSearchInput);
+  document.getElementById('review-search')?.addEventListener('input', handleSearchInput);
 
   document.getElementById('lead-filter')?.addEventListener('change', (e) => {
     S.leadFilter = e.target.value;
@@ -1510,6 +1780,23 @@ function bind() {
   document.getElementById('visit-filter')?.addEventListener('change', (e) => {
     S.visitFilter = e.target.value;
     render();
+  });
+
+  document.getElementById('review-filter')?.addEventListener('change', (e) => {
+    S.reviewFilter = e.target.value;
+    render();
+  });
+
+  document.getElementById('sync-google-reviews')?.addEventListener('click', async () => {
+    try {
+      showToast('Syncing Google Reviews...');
+      const res = await api('/api/crm/reviews/sync-google', { method: 'POST' });
+      showToast(res.message || 'Google Reviews synced.');
+      await load();
+      render();
+    } catch (err) {
+      showToast(err.message, true);
+    }
   });
 
   // Project selector pills
@@ -1637,6 +1924,7 @@ function bind() {
   });
 
   bindEnquiryActions();
+  bindReviewActions();
 
   document.querySelectorAll('[data-conversation]').forEach((x) => {
     x.onclick = () => messages(x.dataset.conversation).catch((e) => showToast(e.message, true));
@@ -1749,8 +2037,34 @@ function bind() {
 function render() {
   const root = document.getElementById('crm-root');
   if (root) {
+    const activeEl = document.activeElement;
+    let activeId = null;
+    let selectionStart = null;
+    let selectionEnd = null;
+
+    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+      activeId = activeEl.id || null;
+      try {
+        selectionStart = activeEl.selectionStart;
+        selectionEnd = activeEl.selectionEnd;
+      } catch (e) {}
+    }
+
     root.innerHTML = shell(body());
     bind();
+
+    if (activeId) {
+      const restoredEl = document.getElementById(activeId);
+      if (restoredEl) {
+        restoredEl.focus();
+        try {
+          if (selectionStart !== null && selectionEnd !== null) {
+            restoredEl.setSelectionRange(selectionStart, selectionEnd);
+          }
+        } catch (e) {}
+      }
+    }
+
     if (S.tab === 'inbox' && S.active && !S.messages.length) {
       messages(S.active).catch((e) => showToast(e.message, true));
     }
@@ -1761,8 +2075,14 @@ function start() {
   if (timer) clearInterval(timer);
   timer = setInterval(async () => {
     try {
+      const activeEl = document.activeElement;
+      const isUserTyping = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+      const isModalOpen = Boolean(document.getElementById('crm-modal'));
+
       await load();
-      render();
+      if (!isUserTyping && !isModalOpen) {
+        render();
+      }
     } catch (e) {
       console.warn('[crm]', e.message);
     }

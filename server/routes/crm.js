@@ -1,6 +1,7 @@
 import { supabaseAdminGet, supabaseAdminPatch, supabaseAdminPost } from '../lib/supabaseAdmin.js';
+import { getAllReviews, updateReview, ingestGoogleReviews } from './reviews.js';
 
-const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'site_visit', 'negotiation', 'won', 'lost'];
+const LEAD_STATUSES = ['new', 'contacted', 'interested', 'qualified', 'site_visit', 'negotiation', 'converted', 'won', 'lost'];
 const INVENTORY_STATUSES = ['AVAILABLE', 'HOLD', 'RESERVED', 'BOOKED', 'SOLD', 'BLOCKED'];
 const VISIT_STATUSES = ['REQUESTED', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'RESCHEDULED'];
 const BOOKING_STATUSES = ['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED'];
@@ -85,12 +86,13 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
   const section = pathParts[2]; const id = pathParts[3];
 
   if (req.method === 'GET' && section === 'summary') {
-    const [leads, conversations, visits, properties, bookings] = await Promise.all([
+    const [leads, conversations, visits, properties, bookings, allReviews] = await Promise.all([
       supabaseAdminGet('leads', { select: 'id,status,source,created_at', limit: '5000' }),
       supabaseAdminGet('whatsapp_conversations', { select: 'id,status,ai_enabled,last_message_at', limit: '2000' }),
       supabaseAdminGet('site_visits', { select: 'id,status,scheduled_at,requested_at', limit: '2000' }),
       supabaseAdminGet('properties', { select: 'id,inventory_status', limit: '5000' }),
-      supabaseAdminGet('bookings', { select: 'id,status,created_at', limit: '2000' })
+      supabaseAdminGet('bookings', { select: 'id,status,created_at', limit: '2000' }),
+      getAllReviews().catch(() => [])
     ]);
     return { status: 200, data: {
       totalLeads: leads.length, newLeads: leads.filter(x => (x.status || 'new') === 'new').length,
@@ -100,7 +102,10 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       confirmedVisits: visits.filter(x => x.status === 'CONFIRMED').length,
       inventory: Object.fromEntries(INVENTORY_STATUSES.map(s => [s.toLowerCase(), properties.filter(x => x.inventory_status === s).length])),
       bookings: bookings.length,
-      bookingStatus: Object.fromEntries(BOOKING_STATUSES.map(s => [s, bookings.filter(x => x.status === s).length]))
+      bookingStatus: Object.fromEntries(BOOKING_STATUSES.map(s => [s, bookings.filter(x => x.status === s).length])),
+      totalReviews: allReviews.length,
+      pendingReviews: allReviews.filter(r => r.status === 'PENDING').length,
+      approvedReviews: allReviews.filter(r => r.status === 'APPROVED' && r.is_visible).length
     } };
   }
 
@@ -244,6 +249,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
     const scheduledAt = body.scheduled_at !== undefined ? iso(body.scheduled_at) : visit.scheduled_at;
     if (body.scheduled_at && !scheduledAt) return bad('scheduled_at must be a valid date/time.', 'INVALID_SCHEDULE');
     if (next === 'CONFIRMED' && !scheduledAt) return bad('A confirmed site visit needs a scheduled date and time.', 'SCHEDULE_REQUIRED');
+    let notificationSent = false;
     if (next === 'CONFIRMED') {
       let conv = (await supabaseAdminGet('whatsapp_conversations', { select: 'id,phone,status', lead_id: `eq.${visit.lead_id}`, order: 'last_message_at.desc.nullslast', limit: '1' }))[0];
       if (!conv && visit.leads?.phone) {
@@ -265,16 +271,58 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
             `Best regards,\n` +
             `*Real Estate Brothers group Team*`;
           await writeOutbound(conv, messageText);
+          notificationSent = true;
         } catch (e) {
           console.warn('[crm] site-visit WhatsApp send warning:', e?.message || e);
         }
       }
       // CRITICAL: Site visits are for visiting only. Confirming a site visit NEVER auto-confirms or alters plot bookings.
+    } else if (next === 'CANCELLED') {
+      let conv = (await supabaseAdminGet('whatsapp_conversations', { select: 'id,phone,status', lead_id: `eq.${visit.lead_id}`, order: 'last_message_at.desc.nullslast', limit: '1' }))[0];
+      if (!conv && visit.leads?.phone) conv = await getOrCreateConversation(visit.lead_id, visit.leads.phone);
+      if (conv) {
+        try {
+          const customerName = visit.leads?.name || 'Valued Customer';
+          const projectName = visit.properties?.title || visit.properties?.property_code || 'Real Estate Brothers group Property';
+          const messageText =
+            `*Real Estate Brothers group – Site Visit Update*\n\n` +
+            `Hello ${customerName},\n\n` +
+            `Thank you for your interest in *${projectName}*. Your site visit request could not be accommodated for the requested time slot.\n\n` +
+            `Please reply to this message with an alternate convenient date/time, and we will gladly arrange your visit.\n\n` +
+            `Best regards,\n*Real Estate Brothers group Team*`;
+          await writeOutbound(conv, messageText);
+          notificationSent = true;
+        } catch (e) {
+          console.warn('[crm] site-visit cancellation WhatsApp send warning:', e?.message || e);
+        }
+      }
+    } else if (next === 'RESCHEDULED') {
+      let conv = (await supabaseAdminGet('whatsapp_conversations', { select: 'id,phone,status', lead_id: `eq.${visit.lead_id}`, order: 'last_message_at.desc.nullslast', limit: '1' }))[0];
+      if (!conv && visit.leads?.phone) conv = await getOrCreateConversation(visit.lead_id, visit.leads.phone);
+      if (conv) {
+        try {
+          const customerName = visit.leads?.name || 'Valued Customer';
+          const projectName = visit.properties?.title || visit.properties?.property_code || 'Real Estate Brothers group Property';
+          const scheduleText = dateLabel(scheduledAt);
+          const messageText =
+            `*Real Estate Brothers group – SITE VISIT RESCHEDULED* 📅\n\n` +
+            `Hello ${customerName},\n\n` +
+            `Your site visit for *${projectName}* has been rescheduled.\n\n` +
+            `📍 *Project / Unit:* ${projectName}\n` +
+            `📅 *New Scheduled Time:* ${scheduleText}\n\n` +
+            `Our coordinator will welcome you at the site. Reply to this message if you need further adjustments.\n\n` +
+            `Best regards,\n*Real Estate Brothers group Team*`;
+          await writeOutbound(conv, messageText);
+          notificationSent = true;
+        } catch (e) {
+          console.warn('[crm] site-visit reschedule WhatsApp send warning:', e?.message || e);
+        }
+      }
     }
     const update = { status: next, scheduled_at: scheduledAt, notes: body.notes !== undefined ? clean(body.notes) || null : visit.notes, updated_at: new Date().toISOString() };
     if (next === 'CONFIRMED') update.confirmed_at = new Date().toISOString(); if (next === 'COMPLETED') update.completed_at = new Date().toISOString(); if (next === 'CANCELLED') update.cancelled_at = new Date().toISOString();
     const updated = await supabaseAdminPatch('site_visits', { id: `eq.${id}`, status: `eq.${visit.status}` }, update); if (!updated[0]) return { status: 409, error: { code: 'SITE_VISIT_CHANGED', message: 'This visit changed before your action completed. Refresh and try again.' } };
-    return { status: 200, data: { visit: updated[0], confirmation_sent: next === 'CONFIRMED' } };
+    return { status: 200, data: { visit: updated[0], notification_sent: notificationSent, confirmation_sent: next === 'CONFIRMED' } };
   }
 
   if (req.method === 'GET' && section === 'inventory') {
@@ -505,5 +553,62 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
 
     return { status: 200, data: { booking: updated[0], confirmation_sent: confirmationSent } };
   }
+
+  /*
+   * ==========================================
+   * REVIEWS (CRM Management)
+   * ==========================================
+   */
+  if (req.method === 'GET' && section === 'reviews') {
+    const reviews = await getAllReviews();
+    const pendingCount = reviews.filter((r) => r.status === 'PENDING').length;
+    const approvedCount = reviews.filter((r) => r.status === 'APPROVED' && r.is_visible).length;
+    return {
+      status: 200,
+      data: {
+        reviews,
+        total_count: reviews.length,
+        pending_count: pendingCount,
+        approved_count: approvedCount
+      }
+    };
+  }
+
+  if (req.method === 'PATCH' && section === 'reviews' && id) {
+    const updated = await updateReview(id, body);
+    if (!updated) {
+      return { status: 404, error: { code: 'REVIEW_NOT_FOUND', message: 'Review not found.' } };
+    }
+    return { status: 200, data: { review: updated } };
+  }
+
+  if (req.method === 'POST' && section === 'reviews' && pathParts[3] === 'sync-google') {
+    let newReviews = [];
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+    const placeId = process.env.GOOGLE_PLACE_ID;
+    if (apiKey && placeId) {
+      try {
+        const url = `https://places.googleapis.com/v1/places/${placeId}?fields=id,displayName,rating,userRatingCount,reviews&key=${apiKey}`;
+        const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
+        if (response.ok) {
+          const json = await response.json();
+          newReviews = (json.reviews || []).map((r) => ({
+            external_review_id: r.name || r.id,
+            reviewer_name: r.authorAttribution?.displayName || 'Google User',
+            rating: r.rating || 5,
+            review_text: r.text?.text || '',
+            publishTime: r.publishTime,
+            authorUri: r.authorAttribution?.uri || ''
+          }));
+        }
+      } catch (err) {
+        console.warn('[crm-reviews] Google API sync warning:', err?.message || err);
+      }
+    }
+    const ingested = await ingestGoogleReviews(newReviews);
+    const all = await getAllReviews();
+    return { status: 200, data: { synced: ingested.length, reviews: all } };
+  }
+
   return null;
 }

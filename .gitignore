@@ -12,6 +12,7 @@ reference/
 ref_top_*.png
 
 # Temp test files
+scratch/
 test_logo*.png
 scratch_*.py
 extract_assets.py

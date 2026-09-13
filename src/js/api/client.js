@@ -118,5 +118,12 @@ export const api = {
       method: 'POST',
       body: bookingData
     });
+  },
+
+  /**
+   * Fetch approved public customer reviews.
+   */
+  getReviews() {
+    return request('/reviews');
   }
 };

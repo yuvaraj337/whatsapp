@@ -1084,21 +1084,27 @@ function attachEvents(screen) {
 
         try {
           await api.createBooking({
+            type: 'enquiry',
             name,
             phone: mobile,
-            date: 'Immediate Enquiry',
-            time: 'Preferred Slot',
             projectName: selectedUnit?.projectName || 'VR Elite Towers',
+            propertyCode: selectedUnit?.propertyCode || selectedUnit?.unitName || '',
             unitName: selectedUnit?.unitName || 'Apartment Unit',
             propertyId: selectedUnit?.id || null,
-            notes: 'Enquiry from Apartments Journey'
+            propertyType: 'APARTMENT',
+            notes: 'Enquiry from Apartments Journey',
+            source: 'Website'
           });
+          enquiryName = name;
+          window._aptNav('/apartments/vr-elite-towers/enquiry-success');
         } catch (err) {
-          console.warn('[apt-journey] enquiry notice:', err?.message || err);
+          console.error('[apt-journey] enquiry error:', err?.message || err);
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Submit Enquiry';
+          }
+          alert(err?.message || 'Failed to submit enquiry. Please try again.');
         }
-
-        enquiryName = name;
-        window._aptNav('/apartments/vr-elite-towers/enquiry-success');
       });
     }
   }
@@ -1124,20 +1130,28 @@ function attachEvents(screen) {
 
         try {
           await api.createBooking({
+            type: 'site_visit',
             name,
             phone: mobile,
             date,
-            time: 'Preferred Slot',
+            time: '11:00 AM',
             projectName: selectedUnit?.projectName || 'VR Elite Towers',
+            propertyCode: selectedUnit?.propertyCode || selectedUnit?.unitName || '',
             unitName: selectedUnit?.unitName || 'Apartment Unit',
-            propertyId: selectedUnit?.id || null
+            propertyId: selectedUnit?.id || null,
+            propertyType: 'APARTMENT',
+            source: 'Website'
           });
+          siteVisitName = name;
+          window._aptNav('/apartments/vr-elite-towers/site-visit/success');
         } catch (err) {
-          console.warn('[apt-journey] booking notice:', err?.message || err);
+          console.error('[apt-journey] site visit error:', err?.message || err);
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Book Site Visit';
+          }
+          alert(err?.message || 'Failed to schedule site visit. Please try again.');
         }
-
-        siteVisitName = name;
-        window._aptNav('/apartments/vr-elite-towers/site-visit/success');
       });
     }
   }

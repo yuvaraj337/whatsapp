@@ -1,12 +1,11 @@
 import { supabaseAdminGet, supabaseAdminPost, supabaseAdminPatch } from '../lib/supabaseAdmin.js';
 import {
   normalizePhone,
-  sendBookingConfirmationToCustomer,
   sendBookingNotificationToOwner
 } from '../services/whatsappService.js';
 
 // In-memory cache to prevent accidental double-clicks within 30 seconds
-const recentBookingsCache = new Map();
+const recentSubmissionsCache = new Map();
 
 function cleanStr(val) {
   return typeof val === 'string' ? val.trim() : '';
@@ -15,12 +14,19 @@ function cleanStr(val) {
 /**
  * Attempts to parse date into ISO string or null.
  */
-function parseSchedule(dateStr, timeStr) {
+export function parseSchedule(dateStr, timeStr) {
   if (!dateStr) return null;
+  // If date contains non-date strings like "Immediate Enquiry", return null
+  if (/enquiry|inquiry|preferred|immediate/i.test(dateStr)) return null;
   try {
-    const combined = timeStr ? `${dateStr} ${timeStr.split('-')[0].trim()}` : dateStr;
+    const timePart = timeStr && !/anytime|preferred|slot/i.test(timeStr)
+      ? timeStr.split('-')[0].trim()
+      : '10:00 AM';
+    const combined = `${dateStr} ${timePart}`;
     const d = new Date(combined);
-    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+    if (!Number.isNaN(d.getTime())) return d.toISOString();
+    const dOnly = new Date(dateStr);
+    return Number.isNaN(dOnly.getTime()) ? null : dOnly.toISOString();
   } catch {
     return null;
   }
@@ -30,7 +36,7 @@ function parseSchedule(dateStr, timeStr) {
  * Resolves a valid property ID from the database using given clues.
  * Fallbacks to the first available property to satisfy DB foreign keys.
  */
-async function resolvePropertyId(hints = {}) {
+export async function resolvePropertyId(hints = {}) {
   const { propertyId, propertyCode, propertyTitle, projectName } = hints;
 
   if (propertyId) {
@@ -45,7 +51,7 @@ async function resolvePropertyId(hints = {}) {
   if (propertyCode) {
     const byCode = await supabaseAdminGet('properties', {
       select: 'id',
-      property_code: `eq.${propertyCode}`,
+      property_code: `eq.${propertyCode.toUpperCase()}`,
       limit: '1'
     }).catch(() => []);
     if (byCode[0]?.id) return byCode[0].id;
@@ -62,9 +68,10 @@ async function resolvePropertyId(hints = {}) {
 
   // Look for any property belonging to the project
   if (projectName) {
+    const cleanProject = projectName.replace(/\(.*\)/, '').trim();
     const projects = await supabaseAdminGet('projects', {
       select: 'id',
-      name: `ilike.%${projectName}%`,
+      name: `ilike.%${cleanProject}%`,
       limit: '1'
     }).catch(() => []);
 
@@ -85,31 +92,43 @@ async function resolvePropertyId(hints = {}) {
 
 /**
  * Finds or creates a customer lead in the database.
+ * Normalizes Indian phone numbers and preserves customer details.
  */
-async function findOrCreateLead(name, normalizedPhone, email, notes) {
+export async function findOrCreateLead(name, rawPhone, email, notes, source = 'Website', status = 'new') {
+  const normalizedPhone = normalizePhone(rawPhone);
+  if (!normalizedPhone) throw new Error('Valid phone number is required.');
+
   const existing = await supabaseAdminGet('leads', {
-    select: 'id,name,phone,email,source,status',
+    select: 'id,name,phone,email,source,status,notes',
     phone: `eq.${normalizedPhone}`,
     limit: '1'
   }).catch(() => []);
 
   if (existing[0]) {
-    const update = { status: 'site_visit', updated_at: new Date().toISOString() };
-    if (!existing[0].name && name) update.name = name;
-    if (!existing[0].email && email) update.email = email;
-    await supabaseAdminPatch('leads', { id: `eq.${existing[0].id}` }, update).catch(() => null);
-    return existing[0];
+    const lead = existing[0];
+    const update = { updated_at: new Date().toISOString() };
+    if (!lead.name && name) update.name = name;
+    if (!lead.email && email) update.email = email;
+    if (notes) {
+      update.notes = lead.notes ? `${lead.notes}\n---\n${notes}` : notes;
+    }
+    // Only upgrade status if not already advanced
+    if ((!lead.status || lead.status === 'new') && status !== 'new') {
+      update.status = status;
+    }
+    await supabaseAdminPatch('leads', { id: `eq.${lead.id}` }, update).catch(() => null);
+    return { ...lead, ...update };
   }
 
   const created = await supabaseAdminPost('leads', {
     name: name || null,
     phone: normalizedPhone,
     email: email || null,
-    source: 'website_booking',
-    status: 'site_visit',
-    notes: notes || 'Created from website booking form.'
+    source: source || 'Website',
+    status: status || 'new',
+    notes: notes || 'Created from website enquiry form.'
   }).catch((err) => {
-    console.error('[booking] Failed to insert lead:', err.message || err);
+    console.error('[lead] Failed to insert lead:', err.message || err);
     throw err;
   });
 
@@ -117,143 +136,115 @@ async function findOrCreateLead(name, normalizedPhone, email, notes) {
 }
 
 /**
- * Handles POST /api/bookings
+ * Common Site Visit Creation Service.
+ * Used by BOTH website site-visit submissions AND WhatsApp AI assistant.
+ * Idempotent, deduplicated, and strictly keeps plot inventory AVAILABLE.
  */
-export async function handleBookings(req, pathParts, body = {}) {
-  if (req.method !== 'POST') {
+export async function createSiteVisitRecord(params = {}) {
+  const name = cleanStr(params.name || params.customer_name);
+  const rawPhone = cleanStr(params.phone || params.customer_phone);
+  const email = cleanStr(params.email || params.customer_email || '');
+  const projectName = cleanStr(params.projectName || params.project_name || 'VR Green Meadows');
+  const propertyCode = cleanStr(params.propertyCode || params.property_code || '');
+  const propertyId = params.propertyId || params.property_id || null;
+  const date = cleanStr(params.date || params.scheduled_at || '');
+  const time = cleanStr(params.time || 'Anytime');
+  const notes = cleanStr(params.notes || '');
+  const source = cleanStr(params.source || 'Website');
+  const whatsapp_message_id = cleanStr(params.whatsapp_message_id || '');
+
+  if (whatsapp_message_id && recentSubmissionsCache.has(whatsapp_message_id)) {
     return {
-      status: 405,
-      error: { code: 'METHOD_NOT_ALLOWED', message: 'Only POST is supported for bookings.' }
-    };
-  }
-
-  console.log('[booking] received booking request');
-
-  const name = cleanStr(body.name || body.fullName || body.customerName);
-  const rawPhone = cleanStr(body.phone || body.mobile || body.customerPhone || body.mobileNumber);
-  const email = cleanStr(body.email || body.customerEmail);
-  const date = cleanStr(body.date || body.preferredDate || body.visitDate || body.timeSlot);
-  const time = cleanStr(body.time || body.preferredTime || body.visitTime || body.timeSlot || 'Anytime');
-  const projectName = cleanStr(
-    body.projectName ||
-    body.propertyTitle ||
-    body.unitName ||
-    body.project ||
-    body.property ||
-    'Real Estate Brothers group Property'
-  );
-  const notes = cleanStr(body.message || body.notes || body.pickup || '');
-
-  // 1. Validation
-  if (!name || name.length < 2) {
-    return {
-      status: 400,
-      error: { code: 'VALIDATION_ERROR', message: 'Please enter a valid full name.' }
+      success: true,
+      duplicate: true,
+      duplicatePrevented: true,
+      site_visit_id: recentSubmissionsCache.get(whatsapp_message_id),
+      message: 'Duplicate site visit request filtered.'
     };
   }
 
   const normalizedPhone = normalizePhone(rawPhone);
   if (!normalizedPhone || normalizedPhone.length < 10) {
-    return {
-      status: 400,
-      error: { code: 'VALIDATION_ERROR', message: 'Please enter a valid phone number with at least 10 digits.' }
-    };
+    throw new Error('Please enter a valid 10-digit mobile number.');
   }
 
-  if (!date) {
-    return {
-      status: 400,
-      error: { code: 'VALIDATION_ERROR', message: 'Please select a preferred booking date.' }
-    };
+  const scheduledIso = parseSchedule(date, time);
+  const resolvedPropId = await resolvePropertyId({
+    propertyId,
+    propertyCode,
+    projectName,
+    propertyTitle: propertyCode ? `Plot ${propertyCode}` : projectName
+  });
+
+  // 1. Find or create Lead
+  const visitNotes = `[${source} Site Visit] Project: ${projectName}${propertyCode ? `, Unit: ${propertyCode}` : ''} | Requested Date: ${date} (${time})${notes ? ` | Notes: ${notes}` : ''}`;
+  const lead = await findOrCreateLead(
+    name,
+    normalizedPhone,
+    email,
+    visitNotes,
+    source,
+    'site_visit'
+  );
+
+  if (!lead?.id) {
+    throw new Error('Failed to resolve or create customer lead for site visit.');
   }
 
-  console.log(`[booking] validation passed for customer: "${name}", phone: "${normalizedPhone}"`);
+  // 2. Prevent duplicate site visit within same day for same phone & property
+  if (resolvedPropId) {
+    const existingVisits = await supabaseAdminGet('site_visits', {
+      select: 'id,status,scheduled_at,requested_at',
+      lead_id: `eq.${lead.id}`,
+      property_id: `eq.${resolvedPropId}`,
+      status: `in.(REQUESTED,CONFIRMED)`,
+      order: 'requested_at.desc',
+      limit: '1'
+    }).catch(() => []);
 
-  // 2. Duplicate Prevention (30-second window for same phone and project)
-  const dedupeKey = `${normalizedPhone}_${projectName}_${date}`;
-  const now = Date.now();
-  if (recentBookingsCache.has(dedupeKey)) {
-    const cached = recentBookingsCache.get(dedupeKey);
-    if (now - cached.timestamp < 30000) {
-      console.log(`[booking] duplicate request detected within 30s for ${dedupeKey}, returning existing record.`);
+    if (existingVisits[0]) {
+      console.log(`[site-visit] Existing pending/confirmed visit found for lead ${lead.id} on property ${resolvedPropId}, returning existing record.`);
+      if (whatsapp_message_id) {
+        recentSubmissionsCache.set(whatsapp_message_id, existingVisits[0].id);
+      }
       return {
-        status: 200,
-        data: {
-          ...cached.response,
-          duplicatePrevented: true
-        }
+        visit: existingVisits[0],
+        lead,
+        site_visit_id: existingVisits[0].id,
+        success: true,
+        duplicatePrevented: true,
+        duplicate: true
       };
     }
   }
 
-  // 3. Resolve property ID for relational foreign key
-  const propertyId = await resolvePropertyId({
-    propertyId: body.propertyId,
-    propertyCode: body.propertyCode,
-    propertyTitle: projectName,
-    projectName
+  // 3. Save site visit request (Status is REQUESTED / PENDING, inventory remains AVAILABLE)
+  const visitRows = await supabaseAdminPost('site_visits', {
+    lead_id: lead.id,
+    property_id: resolvedPropId,
+    requested_at: new Date().toISOString(),
+    scheduled_at: scheduledIso,
+    status: 'REQUESTED',
+    notes: `${source} Site Visit: ${projectName}${propertyCode ? ` (${propertyCode})` : ''} - Date: ${date}, Time: ${time}${whatsapp_message_id ? ` | Message ID: ${whatsapp_message_id}` : ''}${notes ? ` | Notes: ${notes}` : ''}`
   });
 
-  if (!propertyId) {
-    console.error('[booking] No properties found in database to link booking to.');
-    return {
-      status: 500,
-      error: { code: 'DATABASE_ERROR', message: 'Unable to link booking to property inventory.' }
-    };
+  const siteVisit = visitRows[0] || null;
+
+  if (whatsapp_message_id && siteVisit?.id) {
+    recentSubmissionsCache.set(whatsapp_message_id, siteVisit.id);
   }
 
-  // 4. Save to Database
-  let lead = null;
-  let siteVisit = null;
-  let booking = null;
-  const bookingRef = `VR-BK-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
-
-  try {
-    lead = await findOrCreateLead(
-      name,
-      normalizedPhone,
-      email,
-      `Site visit requested for ${projectName} on ${date} (${time})`
-    );
-
-    if (!lead?.id) {
-      throw new Error('Failed to resolve or create customer lead.');
-    }
-
-    const scheduledIso = parseSchedule(date, time);
-
-    // Save site visit request
-    const visitRows = await supabaseAdminPost('site_visits', {
+  // 4. Record in lead_properties
+  if (resolvedPropId) {
+    await supabaseAdminPost('lead_properties', {
       lead_id: lead.id,
-      property_id: propertyId,
-      requested_at: new Date().toISOString(),
-      scheduled_at: scheduledIso,
-      status: 'REQUESTED',
-      notes: `Website booking: ${projectName} - Date: ${date}, Time: ${time}${notes ? ` | Notes: ${notes}` : ''}`
-    });
-    siteVisit = visitRows[0] || null;
-
-    // Save booking record
-    const bookingRows = await supabaseAdminPost('bookings', {
-      lead_id: lead.id,
-      property_id: propertyId,
-      status: 'PENDING',
-      booking_reference: bookingRef,
-      notes: `Booking for ${projectName} on ${date} (${time})`
-    });
-    booking = bookingRows[0] || null;
-
-    console.log(`[booking] saved successfully: id=${booking?.id || siteVisit?.id}, reference=${bookingRef}`);
-  } catch (dbError) {
-    console.error('[booking] Database insert failed:', dbError?.message || dbError);
-    return {
-      status: 500,
-      error: { code: 'DATABASE_ERROR', message: 'Failed to save booking in database. Please try again.' }
-    };
+      property_id: resolvedPropId,
+      interest_type: 'site_visit',
+      notes: `Site visit scheduled for ${date} (${time})`
+    }).catch(() => null);
   }
 
-  // 5. Initialize or verify WhatsApp conversation record for customer lead (ready for CRM)
-  let customerNotificationSent = false;
+  // 5. Ensure WhatsApp conversation exists for lead
   try {
     const convs = await supabaseAdminGet('whatsapp_conversations', {
       select: 'id',
@@ -272,39 +263,213 @@ export async function handleBookings(req, pathParts, body = {}) {
     console.warn('[whatsapp] conversation init warning:', convErr.message || convErr);
   }
 
-  // 6. Owner WhatsApp Notification
-  let ownerNotificationSent = false;
-  try {
-    const ownerPhone = process.env.WHATSAPP_OWNER_PHONE;
-    if (ownerPhone) {
-      console.log(`[whatsapp] sending owner notification to ${ownerPhone}...`);
+  return {
+    visit: siteVisit,
+    lead,
+    site_visit_id: siteVisit?.id,
+    success: true,
+    duplicatePrevented: false,
+    duplicate: false
+  };
+}
+
+/**
+ * Handles POST /api/bookings
+ * Serves both Enquiries and Site Visits from website forms.
+ */
+export async function handleBookings(req, pathParts, body = {}) {
+  if (req.method !== 'POST') {
+    return {
+      status: 405,
+      error: { code: 'METHOD_NOT_ALLOWED', message: 'Only POST is supported for bookings.' }
+    };
+  }
+
+  console.log('[booking] received request body:', JSON.stringify(body));
+
+  const name = cleanStr(body.name || body.fullName || body.customerName);
+  const rawPhone = cleanStr(body.phone || body.mobile || body.customerPhone || body.mobileNumber);
+  const email = cleanStr(body.email || body.customerEmail);
+  const date = cleanStr(body.date || body.preferredDate || body.visitDate || body.timeline);
+  const time = cleanStr(body.time || body.preferredTime || body.visitTime || body.timeSlot || 'Anytime');
+  const propertyCode = cleanStr(body.propertyCode || body.unitName || body.plotNumber || body.property || '');
+  const projectName = cleanStr(
+    body.projectName ||
+    body.propertyTitle ||
+    body.project ||
+    'VR Real Estates Property'
+  );
+  const propertyType = cleanStr(body.propertyType || body.category || '');
+  const message = cleanStr(body.message || body.notes || body.requirement || body.pickup || '');
+
+  // 1. Validation
+  if (!name || name.length < 2) {
+    return {
+      status: 400,
+      error: { code: 'VALIDATION_ERROR', message: 'Please enter a valid full name.' }
+    };
+  }
+
+  const normalizedPhone = normalizePhone(rawPhone);
+  if (!normalizedPhone || normalizedPhone.length < 10) {
+    return {
+      status: 400,
+      error: { code: 'VALIDATION_ERROR', message: 'Please enter a valid 10-digit mobile number.' }
+    };
+  }
+
+  // 2. Identify whether this is an ENQUIRY or a SITE VISIT
+  const isEnquiry =
+    body.type === 'enquiry' ||
+    body.isEnquiry === true ||
+    date === 'Immediate Enquiry' ||
+    date === 'Contact Page Inquiry' ||
+    !date ||
+    /enquiry|inquiry|preferred\s*slot/i.test(date) ||
+    /preferred\s*slot/i.test(time);
+
+  // 3. Deduplication Check (30-second window for same phone and project)
+  const dedupeKey = `${normalizedPhone}_${projectName}_${isEnquiry ? 'enquiry' : date}`;
+  const now = Date.now();
+  if (recentSubmissionsCache.has(dedupeKey)) {
+    const cached = recentSubmissionsCache.get(dedupeKey);
+    if (now - cached.timestamp < 30000) {
+      console.log(`[submission] duplicate request detected within 30s for ${dedupeKey}, returning existing record.`);
+      return {
+        status: 200,
+        data: {
+          ...cached.response,
+          duplicatePrevented: true
+        }
+      };
+    }
+  }
+
+  // 4. Handle Flow: ENQUIRY vs SITE VISIT
+  if (isEnquiry) {
+    console.log(`[enquiry] Processing customer enquiry for "${name}" (${normalizedPhone}) - Project: ${projectName}`);
+    
+    const formattedNotes = `[Website Enquiry] Project: ${projectName}${propertyCode ? ` | Property/Plot: ${propertyCode}` : ''}${propertyType ? ` | Type: ${propertyType}` : ''}\nMessage: ${message || 'Customer requested project details and pricing.'}`;
+    
+    let lead = null;
+    try {
+      lead = await findOrCreateLead(
+        name,
+        normalizedPhone,
+        email,
+        formattedNotes,
+        'Website',
+        'new'
+      );
+
+      // Resolve property to link interest
+      const propertyId = await resolvePropertyId({
+        propertyId: body.propertyId,
+        propertyCode,
+        projectName,
+        propertyTitle: projectName
+      });
+
+      if (propertyId && lead?.id) {
+        await supabaseAdminPost('lead_properties', {
+          lead_id: lead.id,
+          property_id: propertyId,
+          interest_type: 'enquiry',
+          notes: message || `Enquiry for ${projectName} ${propertyCode}`
+        }).catch((e) => console.warn('[enquiry] lead_properties warning:', e?.message || e));
+      }
+    } catch (dbErr) {
+      console.error('[enquiry] Database insert failed:', dbErr?.message || dbErr);
+      return {
+        status: 500,
+        error: { code: 'DATABASE_ERROR', message: 'Failed to record enquiry. Please try again.' }
+      };
+    }
+
+    // Owner WhatsApp Notification
+    let ownerNotificationSent = false;
+    try {
       const ownerResult = await sendBookingNotificationToOwner({
         customerName: name,
         customerPhone: normalizedPhone,
         customerEmail: email,
-        projectName,
-        date,
-        time,
-        notes
+        projectName: `${projectName} (Enquiry)`,
+        date: 'Immediate Enquiry',
+        time: 'Flexible',
+        notes: message
       });
-
-      if (ownerResult.success) {
-        ownerNotificationSent = true;
-        console.log(`[whatsapp] owner notification sent (msg id: ${ownerResult.messageId || 'ok'})`);
-      } else {
-        console.warn(`[whatsapp] owner notification failed: ${ownerResult.error}`);
-      }
-    } else {
-      console.log('[whatsapp] WHATSAPP_OWNER_PHONE not configured, skipped owner notification.');
+      ownerNotificationSent = Boolean(ownerResult?.success);
+    } catch (err) {
+      console.warn('[whatsapp] owner notification warning:', err?.message || err);
     }
-  } catch (err) {
-    console.error(`[whatsapp] owner notification error: ${err.message || err}`);
+
+    const responseData = {
+      success: true,
+      type: 'enquiry',
+      leadId: lead?.id || null,
+      customerName: name,
+      projectName,
+      customerNotification: {
+        sent: false,
+        method: 'whatsapp'
+      },
+      ownerNotification: {
+        sent: ownerNotificationSent
+      },
+      message: 'Thank you! Your enquiry has been received. Our team will contact you shortly.'
+    };
+
+    recentSubmissionsCache.set(dedupeKey, { timestamp: now, response: responseData });
+    return { status: 201, data: responseData };
   }
 
-  // 7. Prepare response and store in deduplication cache
+  // SITE VISIT FLOW
+  console.log(`[site-visit] Processing site visit request for "${name}" (${normalizedPhone}) on ${date} (${time})`);
+
+  let visitResult = null;
+  try {
+    visitResult = await createSiteVisitRecord({
+      name,
+      phone: normalizedPhone,
+      email,
+      projectName,
+      propertyCode,
+      propertyId: body.propertyId,
+      date,
+      time,
+      notes: message,
+      source: body.source || 'Website'
+    });
+  } catch (err) {
+    console.error('[site-visit] Failed to create site visit record:', err?.message || err);
+    return {
+      status: 500,
+      error: { code: 'DATABASE_ERROR', message: err?.message || 'Failed to save site visit request.' }
+    };
+  }
+
+  // Notify Owner
+  let ownerNotificationSent = false;
+  try {
+    const ownerResult = await sendBookingNotificationToOwner({
+      customerName: name,
+      customerPhone: normalizedPhone,
+      customerEmail: email,
+      projectName,
+      date,
+      time,
+      notes: message
+    });
+    ownerNotificationSent = Boolean(ownerResult?.success);
+  } catch (err) {
+    console.warn('[whatsapp] owner notification warning:', err?.message || err);
+  }
+
   const responseData = {
-    bookingId: booking?.id || siteVisit?.id || null,
-    reference: bookingRef,
+    success: true,
+    type: 'site_visit',
+    siteVisitId: visitResult?.visit?.id || null,
+    leadId: visitResult?.lead?.id || null,
     customerNotification: {
       sent: false,
       pendingOwnerConfirmation: true
@@ -315,20 +480,6 @@ export async function handleBookings(req, pathParts, body = {}) {
     message: 'Your site visit request has been received. Our team will review and send a WhatsApp confirmation once approved.'
   };
 
-  recentBookingsCache.set(dedupeKey, {
-    timestamp: now,
-    response: responseData
-  });
-
-  // Clean old cache entries
-  if (recentBookingsCache.size > 500) {
-    for (const [k, v] of recentBookingsCache.entries()) {
-      if (now - v.timestamp > 60000) recentBookingsCache.delete(k);
-    }
-  }
-
-  return {
-    status: 201,
-    data: responseData
-  };
+  recentSubmissionsCache.set(dedupeKey, { timestamp: now, response: responseData });
+  return { status: 201, data: responseData };
 }
