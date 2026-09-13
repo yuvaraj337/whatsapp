@@ -208,16 +208,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
           console.warn('[crm] site-visit WhatsApp send warning:', e?.message || e);
         }
       }
-      // Also sync any linked pending booking to CONFIRMED
-      await supabaseAdminPatch('bookings', {
-        lead_id: `eq.${visit.lead_id}`,
-        property_id: `eq.${visit.property_id}`,
-        status: 'eq.PENDING'
-      }, {
-        status: 'CONFIRMED',
-        confirmed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }).catch(() => null);
+      // CRITICAL: Site visits are for visiting only. Confirming a site visit NEVER auto-confirms or alters plot bookings.
     }
     const update = { status: next, scheduled_at: scheduledAt, notes: body.notes !== undefined ? clean(body.notes) || null : visit.notes, updated_at: new Date().toISOString() };
     if (next === 'CONFIRMED') update.confirmed_at = new Date().toISOString(); if (next === 'COMPLETED') update.completed_at = new Date().toISOString(); if (next === 'CANCELLED') update.cancelled_at = new Date().toISOString();
@@ -237,6 +228,66 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
     const status = clean(searchParams.get('status')).toUpperCase(); const params = { select: 'id,lead_id,property_id,status,booking_reference,amount,currency,booked_at,confirmed_at,cancelled_at,cancellation_reason,notes,created_at,updated_at,leads(id,name,phone,email,status),properties(id,property_code,title,inventory_status,projects(name,slug))', order: 'created_at.desc', limit: '500' };
     if (status && status !== 'ALL') params.status = `eq.${status}`; return { status: 200, data: { bookings: await supabaseAdminGet('bookings', params) } };
   }
+  if (req.method === 'POST' && section === 'offline-booking') {
+    const propertyId = clean(body.property_id);
+    const name = clean(body.customer_name);
+    const phone = clean(body.customer_phone);
+    const email = clean(body.customer_email);
+    const targetStatus = clean(body.status).toUpperCase() === 'HOLD' ? 'RESERVED' : 'BOOKED';
+    const amount = body.amount ?? null;
+    const notes = clean(body.notes) || 'Offline customer booking recorded via CRM';
+
+    if (!propertyId || !name || !phone) {
+      return bad('Property, customer name, and customer phone are required.', 'OFFLINE_BOOKING_FIELDS_REQUIRED');
+    }
+
+    let lead = (await supabaseAdminGet('leads', { select: 'id,name,phone,email', phone: `eq.${phone}`, limit: '1' }).catch(() => []))[0];
+    if (!lead) {
+      const createdLeads = await supabaseAdminPost('leads', {
+        name,
+        phone,
+        email: email || null,
+        source: 'offline_walkin',
+        status: 'qualified',
+        notes: `Offline customer for property ${propertyId}. ${notes}`
+      }).catch(() => []);
+      lead = createdLeads[0];
+    }
+
+    await supabaseAdminPatch('properties', { id: `eq.${propertyId}` }, {
+      inventory_status: targetStatus,
+      updated_at: new Date().toISOString()
+    }).catch((e) => console.warn('[crm] property patch warning:', e?.message || e));
+
+    const bookingRows = await supabaseAdminPost('bookings', {
+      lead_id: lead?.id || null,
+      property_id: propertyId,
+      status: targetStatus === 'BOOKED' ? 'CONFIRMED' : 'PENDING',
+      booking_reference: `OFF-${Date.now().toString(36).toUpperCase()}`,
+      amount: amount || null,
+      currency: 'INR',
+      notes: `[Offline Booking] Customer: ${name}, Phone: ${phone}. ${notes}`
+    }).catch(() => []);
+
+    await supabaseAdminPost('inventory_status_history', {
+      property_id: propertyId,
+      from_status: 'AVAILABLE',
+      to_status: targetStatus,
+      reason: `Offline booking: ${name} (${phone})`
+    }).catch(() => null);
+
+    return {
+      status: 201,
+      data: {
+        success: true,
+        booking: bookingRows[0] || null,
+        lead,
+        property_id: propertyId,
+        inventory_status: targetStatus
+      }
+    };
+  }
+
   if (req.method === 'POST' && section === 'bookings') {
     const leadId = clean(body.lead_id), propertyId = clean(body.property_id); if (!leadId || !propertyId) return bad('Lead and property are required.', 'BOOKING_FIELDS_REQUIRED');
     const property = await propertyById(propertyId); if (!property) return { status: 404, error: { code: 'PROPERTY_NOT_FOUND', message: 'Property not found.' } }; if (!await leadById(leadId)) return { status: 404, error: { code: 'LEAD_NOT_FOUND', message: 'Lead not found.' } };

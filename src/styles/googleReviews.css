@@ -1,0 +1,297 @@
+/* ==========================================================================
+   Google Reviews Component Styles
+   Authored to Google Places guidelines + luxury editorial aesthetic
+   ========================================================================== */
+
+.google-reviews-section {
+  padding: 80px 24px;
+  background: #FAF8F5;
+  border-top: 1px solid #EDE8E0;
+  border-bottom: 1px solid #EDE8E0;
+}
+
+.google-reviews-container {
+  max-width: 1240px;
+  margin: 0 auto;
+}
+
+.google-reviews-header {
+  text-align: center;
+  max-width: 680px;
+  margin: 0 auto 40px auto;
+}
+
+.google-reviews-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 14px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.google-reviews-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: clamp(2rem, 3.5vw, 2.75rem);
+  font-weight: 700;
+  color: #1A3B2B;
+  margin-bottom: 12px;
+  letter-spacing: -0.01em;
+}
+
+.google-reviews-subtitle {
+  font-size: 1.05rem;
+  color: #5A6A60;
+  line-height: 1.6;
+}
+
+/* Rating Summary Card */
+.google-summary-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 24px;
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 16px;
+  padding: 24px 32px;
+  margin-bottom: 40px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+}
+
+.google-score-col {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.google-score-val {
+  font-size: 2.8rem;
+  font-weight: 800;
+  color: #1A3B2B;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.google-stars-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.google-score-lbl {
+  font-size: 0.95rem;
+  color: #4B5563;
+  padding-left: 12px;
+  border-left: 2px solid #E5E7EB;
+}
+
+.google-score-lbl strong {
+  color: #111827;
+  font-weight: 700;
+}
+
+.google-cta-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.google-write-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: #FFFFFF;
+  color: #1F2937;
+  border: 1.5px solid #D1D5DB;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.google-write-btn:hover {
+  background: #F9FAFB;
+  border-color: #9CA3AF;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.google-policy-note {
+  font-size: 0.75rem;
+  color: #9CA3AF;
+}
+
+/* Reviews Grid */
+.google-reviews-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 24px;
+  margin-bottom: 36px;
+}
+
+.google-rev-card {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.google-rev-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.07);
+}
+
+.rev-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rev-author-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rev-avatar-img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid #E5E7EB;
+}
+
+.rev-avatar-fallback {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #1A3B2B;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.rev-author-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.rev-date {
+  font-size: 0.8rem;
+  color: #9CA3AF;
+  margin-top: 2px;
+}
+
+.rev-google-badge {
+  flex-shrink: 0;
+}
+
+.rev-stars-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.rev-text {
+  font-size: 0.92rem;
+  color: #4B5563;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.rev-read-more-btn {
+  background: none;
+  border: none;
+  color: #1A3B2B;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 4px 0 0 0;
+  text-decoration: underline;
+}
+
+.google-empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px 20px;
+  background: #FFFFFF;
+  border: 1px dashed #D1D5DB;
+  border-radius: 16px;
+}
+
+.google-empty-state p {
+  font-size: 1rem;
+  color: #6B7280;
+  margin-bottom: 16px;
+}
+
+/* Footer Link */
+.google-footer-link-wrap {
+  text-align: center;
+}
+
+.google-view-all-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #1A3B2B;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.google-view-all-link:hover {
+  background: #EBF3EE;
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .google-summary-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .google-cta-col {
+    align-items: flex-start;
+    width: 100%;
+  }
+  .google-write-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .google-score-lbl {
+    padding-left: 0;
+    border-left: none;
+  }
+}

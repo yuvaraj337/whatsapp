@@ -3,6 +3,7 @@ import { renderHero, initHeroSlider } from '../components/hero.js';
 import { renderPropertyCategories } from '../components/propertyCategories.js';
 import { renderFeaturedProperties, initFeaturedProjects } from '../components/featuredProperties.js';
 import { renderFindProperty, initFindProperty } from '../components/findProperty.js';
+import { renderGoogleReviews, initGoogleReviews } from '../components/googleReviews.js';
 import { renderFinalCTA } from '../components/finalCTA.js';
 import { renderFooter, initScrollTop } from '../components/footer.js';
 
@@ -15,6 +16,7 @@ export function renderHomePage() {
         ${renderPropertyCategories()}
         ${renderFeaturedProperties()}
         ${renderFindProperty()}
+        ${renderGoogleReviews()}
         ${renderFinalCTA()}
       </main>
       ${renderFooter()}
@@ -28,6 +30,7 @@ export function renderHomePage() {
       initHeroSlider();
       initFeaturedProjects();
       initFindProperty();
+      initGoogleReviews();
       initScrollTop();
     }
   };

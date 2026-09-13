@@ -337,26 +337,190 @@ function renderScreenOverview() {
         </div>
 
         <!-- Sub Navigation Tabs -->
-        <div class="apt-ref-ov-tabs-row">
-          <button type="button" class="apt-ref-ov-tab active">Overview</button>
-          <button type="button" class="apt-ref-ov-tab">Amenities</button>
-          <button type="button" class="apt-ref-ov-tab">Location</button>
-          <button type="button" class="apt-ref-ov-tab">Gallery</button>
-          <button type="button" class="apt-ref-ov-tab" onclick="window._aptNav('/apartments/vr-elite-towers/floor-plan')">Floor Plan</button>
+        <div class="apt-ref-ov-tabs-row" id="apt-ov-tabs-bar">
+          <button type="button" class="apt-ref-ov-tab active" data-target="overview" onclick="window._aptScrollToSection('overview')">Overview</button>
+          <button type="button" class="apt-ref-ov-tab" data-target="amenities" onclick="window._aptScrollToSection('amenities')">Amenities</button>
+          <button type="button" class="apt-ref-ov-tab" data-target="location" onclick="window._aptScrollToSection('location')">Location</button>
+          <button type="button" class="apt-ref-ov-tab" data-target="gallery" onclick="window._aptScrollToSection('gallery')">Gallery</button>
+          <button type="button" class="apt-ref-ov-tab" data-target="floorplan" onclick="window._aptScrollToSection('floorplan')">Floor Plan</button>
         </div>
 
-        <!-- About Section -->
-        <div class="apt-ref-ov-about-card">
-          <h2 class="apt-ref-ov-about-title">About the Project</h2>
-          <p class="apt-ref-ov-about-desc">${p.about}</p>
-          <div class="apt-ref-ov-actions-row">
-            <button type="button" class="apt-ref-btn-primary" onclick="window._aptNav('/apartments/vr-elite-towers/floor-plan')">
-              <span>View Floor Plan</span> ${ARROW_RIGHT}
-            </button>
-            <button type="button" class="apt-ref-btn-outline" onclick="alert('Downloading VR Elite Towers Brochure...')">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-              <span>Download Brochure</span>
-            </button>
+        <!-- Section 1: Overview & About -->
+        <div id="apt-section-overview" class="apt-ref-ov-section">
+          <div class="apt-ref-ov-about-card">
+            <h2 class="apt-ref-ov-about-title">About the Project</h2>
+            <p class="apt-ref-ov-about-desc">${p.about}</p>
+            <div class="apt-ref-ov-actions-row">
+              <button type="button" class="apt-ref-btn-primary" onclick="window._aptScrollToSection('floorplan')">
+                <span>View Floor Plan</span> ${ARROW_RIGHT}
+              </button>
+              <button type="button" class="apt-ref-btn-outline" onclick="alert('Downloading VR Elite Towers Brochure...')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                <span>Download Brochure</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Amenities -->
+        <div id="apt-section-amenities" class="apt-ref-ov-section" style="margin-top: 32px;">
+          <div class="apt-ref-ov-about-card">
+            <h2 class="apt-ref-ov-about-title">World-Class Amenities</h2>
+            <p class="apt-ref-ov-about-desc">Curated lifestyle spaces designed for wellness, recreation, and community living.</p>
+            <div class="apt-amenities-grid">
+              <div class="apt-amenity-item">
+                <div class="amenity-icon">🏊‍♂️</div>
+                <div>
+                  <div class="amenity-name">Olympic-Length Infinity Pool</div>
+                  <div class="amenity-desc">Rooftop temperature-controlled swimming pool with wooden sun deck</div>
+                </div>
+              </div>
+              <div class="apt-amenity-item">
+                <div class="amenity-icon">🏛️</div>
+                <div>
+                  <div class="amenity-name">25,000 Sq.Ft. Clubhouse</div>
+                  <div class="amenity-desc">Multi-tier entertainment, banquets, and indoor recreational lounges</div>
+                </div>
+              </div>
+              <div class="apt-amenity-item">
+                <div class="amenity-icon">💪</div>
+                <div>
+                  <div class="amenity-name">High-Tech Fitness Studio</div>
+                  <div class="amenity-desc">State-of-the-art gym, dedicated yoga studio, and steam sauna</div>
+                </div>
+              </div>
+              <div class="apt-amenity-item">
+                <div class="amenity-icon">🏸</div>
+                <div>
+                  <div class="amenity-name">Badminton & Squash Courts</div>
+                  <div class="amenity-desc">AC indoor courts built to international competition standards</div>
+                </div>
+              </div>
+              <div class="apt-amenity-item">
+                <div class="amenity-icon">⚡</div>
+                <div>
+                  <div class="amenity-name">Fast EV Charging Stations</div>
+                  <div class="amenity-desc">Dedicated high-speed vehicle charging bays in multi-level basements</div>
+                </div>
+              </div>
+              <div class="apt-amenity-item">
+                <div class="amenity-icon">🛡️</div>
+                <div>
+                  <div class="amenity-name">5-Tier Smart Security</div>
+                  <div class="amenity-desc">24/7 AI-powered CCTV surveillance and biometric access gates</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: Location -->
+        <div id="apt-section-location" class="apt-ref-ov-section" style="margin-top: 32px;">
+          <div class="apt-ref-ov-about-card">
+            <h2 class="apt-ref-ov-about-title">Prime Kokapet Location</h2>
+            <p class="apt-ref-ov-about-desc">Unrivaled connectivity at the epicenter of Hyderabad's western IT corridor and Neopolis development.</p>
+            <div class="apt-loc-grid">
+              <div class="apt-loc-card">
+                <div class="apt-loc-badge">3 Mins</div>
+                <h4>Outer Ring Road (ORR) Exit 1</h4>
+                <p>Immediate signal-free access to Gachibowli, Madhapur, and Rajiv Gandhi International Airport.</p>
+              </div>
+              <div class="apt-loc-card">
+                <div class="apt-loc-badge">5 Mins</div>
+                <h4>Financial District & Neopolis</h4>
+                <p>Proximity to Microsoft, Google, Amazon HQ, and premier corporate campuses.</p>
+              </div>
+              <div class="apt-loc-card">
+                <div class="apt-loc-badge">8 Mins</div>
+                <h4>Healthcare & International Schools</h4>
+                <p>Minutes to Continental Hospital, Keystone International School, and Oakridge.</p>
+              </div>
+            </div>
+            <div style="margin-top: 20px;">
+              <a href="https://maps.google.com/?q=Kokapet+Hyderabad" target="_blank" rel="noopener" class="apt-ref-btn-outline" style="display: inline-flex; align-items: center; gap: 8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                <span>Open in Google Maps</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 4: Gallery -->
+        <div id="apt-section-gallery" class="apt-ref-ov-section" style="margin-top: 32px;">
+          <div class="apt-ref-ov-about-card">
+            <h2 class="apt-ref-ov-about-title">Architectural Gallery</h2>
+            <p class="apt-ref-ov-about-desc">Four distinct perspective angles and interior walkthrough showcases of VR Elite Towers.</p>
+            <div class="apt-gallery-grid">
+              <div class="apt-gallery-card" onclick="window._aptOvSetIndex(0); window.scrollTo({top: 0, behavior: 'smooth'});">
+                <img src="/images/journey/overview_thumb_1.jpg" alt="Living Room Panoramic Lounge" />
+                <div class="apt-gallery-card-caption">Angle 1: Panoramic Living Lounge</div>
+              </div>
+              <div class="apt-gallery-card" onclick="window._aptOvSetIndex(1); window.scrollTo({top: 0, behavior: 'smooth'});">
+                <img src="/images/journey/overview_thumb_2.jpg" alt="Master Bedroom Suite" />
+                <div class="apt-gallery-card-caption">Angle 2: Master Bedroom Suite</div>
+              </div>
+              <div class="apt-gallery-card" onclick="window._aptOvSetIndex(2); window.scrollTo({top: 0, behavior: 'smooth'});">
+                <img src="/images/journey/overview_thumb_3.jpg" alt="Gourmet Kitchen & Dining" />
+                <div class="apt-gallery-card-caption">Angle 3: Gourmet Kitchen & Dining</div>
+              </div>
+              <div class="apt-gallery-card" onclick="window._aptOvSetIndex(3); window.scrollTo({top: 0, behavior: 'smooth'});">
+                <img src="/images/journey/overview_thumb_4.jpg" alt="Media Lounge & Balcony" />
+                <div class="apt-gallery-card-caption">Angle 4: Media Lounge & Balcony</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 5: Direct Floor Plan -->
+        <div id="apt-section-floorplan" class="apt-ref-ov-section" style="margin-top: 32px;">
+          <div class="apt-ref-ov-about-card">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; margin-bottom: 20px;">
+              <div>
+                <h2 class="apt-ref-ov-about-title" style="margin-bottom: 4px;">Interactive Floor Plan</h2>
+                <p class="apt-ref-ov-about-desc" style="margin-bottom: 0;">Select tower, floor, and click any unit below to view room layouts and book site visits.</p>
+              </div>
+              <!-- Tower & Floor Selectors -->
+              <div class="apt-ref-fp-filters" style="margin: 0;">
+                <div class="filter-group">
+                  <label class="filter-label">Tower</label>
+                  <div class="select-wrapper">
+                    <select id="fp-tower-select" onchange="window._aptSetTower(this.value)">
+                      <option value="Tower A" ${selectedTower === 'Tower A' ? 'selected' : ''}>Tower A</option>
+                      <option value="Tower B">Tower B</option>
+                      <option value="Tower C">Tower C</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="filter-group">
+                  <label class="filter-label">Floor</label>
+                  <div class="select-wrapper">
+                    <select id="fp-floor-select" onchange="window._aptSetFloor(this.value)">
+                      <option value="7th Floor" ${selectedFloor === '7th Floor' ? 'selected' : ''}>7th Floor</option>
+                      <option value="6th Floor">6th Floor</option>
+                      <option value="5th Floor">5th Floor</option>
+                      <option value="4th Floor">4th Floor</option>
+                      <option value="3rd Floor">3rd Floor</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Legend Row -->
+            <div class="apt-ref-fp-legend" style="margin-bottom: 20px;">
+              <div class="legend-item"><span class="dot available"></span> Available</div>
+              <div class="legend-item"><span class="dot booked"></span> Booked</div>
+              <div class="legend-item"><span class="dot hold"></span> On Hold</div>
+            </div>
+
+            <!-- Interactive Floor Plan Canvas/Stage -->
+            ${renderApartmentFloorPlan({
+              units: floorUnitsData,
+              activeUnitId: selectedUnit.id,
+              tower: selectedTower,
+              floor: selectedFloor,
+              projectName: 'VR Elite Towers'
+            })}
           </div>
         </div>
       </div>
@@ -504,7 +668,7 @@ function renderScreenDetails() {
             <button type="button" class="apt-ref-btn-primary" onclick="window._aptNav('/apartments/vr-elite-towers/enquiry')">
               <span>Send Enquiry</span> ${ARROW_RIGHT}
             </button>
-            <button type="button" class="apt-ref-btn-secondary" onclick="window._aptNav('/apartments/vr-elite-towers/site-visit')">
+            <button type="button" class="apt-ref-btn-secondary" onclick="if(window.openSiteVisitModal){ window.openSiteVisitModal({ projectName: '${selectedUnit.projectName}', unitType: 'Apartment', propertyId: '${selectedUnit.id}' }); } else { window._aptNav('/apartments/vr-elite-towers/site-visit'); }">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               <span>Book Site Visit</span>
             </button>
@@ -705,15 +869,15 @@ function renderScreenSiteVisitForm() {
         <form id="apt-ref-sv-form" class="apt-ref-form">
           <div class="form-field">
             <label class="field-label">Full Name *</label>
-            <input type="text" id="sv-input-name" class="field-input" placeholder="Siva Prasad" required />
+            <input type="text" id="sv-input-name" class="field-input" placeholder="Enter your full name" required />
           </div>
           <div class="form-field">
             <label class="field-label">Mobile Number *</label>
-            <input type="tel" id="sv-input-mobile" class="field-input" placeholder="9876543210" maxlength="10" required />
+            <input type="tel" id="sv-input-mobile" class="field-input" placeholder="Enter 10-digit mobile number" maxlength="10" required />
           </div>
           <div class="form-field">
             <label class="field-label">Email</label>
-            <input type="email" id="sv-input-email" class="field-input" placeholder="siva@example.com" />
+            <input type="email" id="sv-input-email" class="field-input" placeholder="Enter email address (optional)" />
           </div>
           <div class="form-field">
             <label class="field-label">Preferred Date *</label>
@@ -840,8 +1004,19 @@ function attachEvents(screen) {
   window._aptSetTower = (val) => { selectedTower = val; };
   window._aptSetFloor = (val) => { selectedFloor = val; };
 
-  // Initialize interactive 3D floor plan if on floorplan screen
-  if (screen === 'floorplan') {
+  window._aptScrollToSection = (sectionId) => {
+    const tabs = document.querySelectorAll('#apt-ov-tabs-bar .apt-ref-ov-tab');
+    tabs.forEach(t => {
+      t.classList.toggle('active', t.getAttribute('data-target') === sectionId);
+    });
+    const targetEl = document.getElementById(`apt-section-${sectionId}`);
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  // Initialize interactive 3D floor plan if on floorplan or overview screen
+  if (screen === 'floorplan' || screen === 'overview') {
     initApartmentFloorPlan({ units: floorUnitsData });
   }
 

@@ -230,7 +230,7 @@ export function renderScreen2Form(customProp = null) {
         <form id="sv-booking-form" class="sv-form-body">
           <div class="sv-input-group">
             <label class="sv-label" for="sv-input-name">Full Name *</label>
-            <input type="text" id="sv-input-name" class="sv-input" placeholder="e.g. Siva Prasad" required />
+            <input type="text" id="sv-input-name" class="sv-input" placeholder="Enter your full name" required />
             <span class="sv-error-msg" id="err-name" style="color: #DC2626; font-size: 0.76rem;"></span>
           </div>
 
@@ -730,6 +730,7 @@ export function renderEnquirySuccess(data) {
 
 // Global window hookups
 window.openSiteVisitFlow = openSiteVisitFlow;
+window.openSiteVisitModal = (customProp) => openSiteVisitFlow(customProp, 'form');
 window.closeSiteVisitFlow = closeSiteVisitFlow;
 window.renderScreen2Form = () => renderScreen2Form();
 window.openGeneralEnquiry = openGeneralEnquiry;

@@ -1,17 +1,34 @@
 import '../../styles/crm.css';
 
-const LEAD_STATUSES=['new','contacted','qualified','site_visit','negotiation','won','lost'];
-const VISIT_STATUSES=['REQUESTED','CONFIRMED','COMPLETED','CANCELLED','NO_SHOW','RESCHEDULED'];
-const BOOKING_STATUSES=['PENDING','CONFIRMED','CANCELLED','COMPLETED'];
-let key=sessionStorage.getItem('vr_crm_key')||'';
-const S={tab:'overview',summary:null,leads:[],conversations:[],visits:[],inventory:[],bookings:[],messages:[],active:null,search:'',leadFilter:'all',visitFilter:'ALL',inventoryFilter:'ALL',bookingFilter:'ALL'};
-let timer=null;
-const esc=v=>String(v??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const label=v=>String(v||'').replaceAll('_',' ').toLowerCase().replace(/\b\w/g,c=>c.toUpperCase());
-const cls=v=>'status-'+String(v||'').toLowerCase().replaceAll('_','-');
-const date=v=>v?new Date(v).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}):'—';
-const initials=v=>(String(v||'VR').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('')||'VR').toUpperCase();
+const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'site_visit', 'negotiation', 'won', 'lost'];
+const VISIT_STATUSES = ['REQUESTED', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'RESCHEDULED'];
+const BOOKING_STATUSES = ['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED'];
+let key = sessionStorage.getItem('vr_crm_key') || '';
+const S = {
+  tab: 'overview',
+  summary: null,
+  leads: [],
+  conversations: [],
+  visits: [],
+  inventory: [],
+  bookings: [],
+  messages: [],
+  active: null,
+  search: '',
+  leadFilter: 'all',
+  visitFilter: 'ALL',
+  inventoryFilter: 'ALL',
+  bookingFilter: 'ALL'
+};
+let timer = null;
+
+const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const label = (v) => String(v || '').replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+const cls = (v) => 'status-' + String(v || '').toLowerCase().replaceAll('_', '-');
+const date = (v) => (v ? new Date(v).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
+const initials = (v) => (String(v || 'VR').split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join('') || 'VR').toUpperCase();
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
 async function api(path, opt = {}) {
   const url = API_BASE ? `${API_BASE}${path}` : path;
   const r = await fetch(url, {
@@ -27,26 +44,1303 @@ async function api(path, opt = {}) {
   if (!r.ok) throw new Error(p?.error?.message || 'CRM request failed.');
   return p.data;
 }
-function login(root,msg=''){root.innerHTML=`<main class="crm-shell crm-login"><div class="crm-login-card"><div class="crm-brand">Real Estate Brothers group</div><h1>Sales CRM</h1><p>Private workspace for leads, WhatsApp conversations, site visits, bookings and inventory.</p>${msg?`<div class="crm-error">${esc(msg)}</div>`:''}<form id="crm-login-form"><label>CRM access key<input id="crm-key" type="password" required autocomplete="current-password"></label><button class="crm-primary">Open CRM</button></form><a class="crm-back" href="#/">← Back to website</a></div></main>`;document.getElementById('crm-login-form').onsubmit=async e=>{e.preventDefault();key=document.getElementById('crm-key').value.trim();try{await api('/api/crm/summary');sessionStorage.setItem('vr_crm_key',key);await load();render();start();}catch(x){key='';login(root,x.message);}};}
-function shell(body){const nav=[['overview','Overview','▦'],['leads','Leads','◉'],['inbox','WhatsApp Inbox','◌'],['visits','Site Visits','⌖'],['inventory','Inventory','▤'],['bookings','Bookings','✓']];return `<main class="crm-app"><aside class="crm-sidebar"><div class="crm-side-brand"><img src="/images/vr-logo.png" alt="Logo" class="crm-logo-img" style="width:36px;height:36px;border-radius:50%;object-fit:contain;margin-right:10px;" /><div><b>Real Estate Brothers group</b><span>Sales CRM</span></div></div><nav>${nav.map(n=>`<button class="crm-nav ${S.tab===n[0]?'active':''}" data-tab="${n[0]}"><i>${n[2]}</i><span>${n[1]}</span>${n[0]==='visits'&&S.summary?.siteVisitRequests?`<em>${S.summary.siteVisitRequests}</em>`:''}</button>`).join('')}</nav><div class="crm-side-footer"><div class="crm-secure">● CRM secure</div><button id="crm-logout">Logout</button><a href="#/">Open website</a></div></aside><section class="crm-main"><header class="crm-header"><div><div class="crm-eyebrow">Real Estate Brothers group · OPERATIONS</div><h1>${label(S.tab)}</h1><p>${({overview:'A single view of sales activity.',leads:'Track every enquiry from first contact to conversion.',inbox:'Manage customer conversations and hand off from AI to a human.',visits:'Review requests and confirm visits only when the owner approves.',inventory:'Control live property availability.',bookings:'Track reservations and confirmed bookings.'}[S.tab])}</p></div><div class="crm-header-actions"><button class="crm-icon-btn" id="refresh">↻</button><span class="crm-sync">● Live</span></div></header>${body}</section></main>`;}
-function stat(t,v,m,i){return `<article class="crm-stat"><div class="crm-stat-icon">${i}</div><div><span>${t}</span><strong>${v}</strong><small>${m}</small></div></article>`;}
-function overview(){const s=S.summary||{},i=s.inventory||{};return `<div class="crm-stats">${stat('Total Leads',s.totalLeads||0,`${s.newLeads||0} new`,'◉')}${stat('Open WhatsApp',s.openConversations||0,'needs attention','◌')}${stat('Visit Requests',s.siteVisitRequests||0,`${s.confirmedVisits||0} confirmed`,'⌖')}${stat('Qualified Leads',s.qualifiedLeads||0,'sales-ready','★')}</div><div class="crm-overview-grid"><section class="crm-card"><div class="crm-card-head"><div><h2>Lead Pipeline</h2><p>Current sales stages</p></div><button class="crm-link" data-go="leads">View all →</button></div><div class="crm-pipeline">${LEAD_STATUSES.map(x=>{const n=S.leads.filter(l=>(l.status||'new')===x).length;return `<div><span>${label(x)}</span><strong>${n}</strong><div class="crm-bar"><i style="width:${Math.min(100,n/Math.max(1,S.leads.length)*100)}%"></i></div></div>`}).join('')}</div></section><section class="crm-card"><div class="crm-card-head"><div><h2>Inventory</h2><p>Database source of truth</p></div><button class="crm-link" data-go="inventory">Manage →</button></div><div class="crm-inventory-summary">${[['available',i.available||0],['reserved',i.reserved||0],['booked',i.booked||0],['sold',i.sold||0]].map(x=>`<div><strong>${x[1]}</strong><span>${label(x[0])}</span></div>`).join('')}</div></section></div><section class="crm-card"><div class="crm-card-head"><div><h2>Recent Leads</h2><p>Latest enquiries</p></div><button class="crm-link" data-go="leads">Manage →</button></div><div class="crm-table-wrap"><table><thead><tr><th>Lead</th><th>Phone</th><th>Source</th><th>Status</th><th>Updated</th></tr></thead><tbody>${S.leads.slice(0,8).map(l=>`<tr data-open-lead="${l.id}"><td><div class="crm-person"><span>${initials(l.name)}</span><div><b>${esc(l.name||'Unknown')}</b><small>${esc(l.email||'No email')}</small></div></div></td><td>${esc(l.phone||'—')}</td><td>${esc(l.source||'website')}</td><td><span class="crm-badge ${cls(l.status||'new')}">${label(l.status||'new')}</span></td><td>${date(l.updated_at)}</td></tr>`).join('')||`<tr><td colspan="5"><div class="crm-empty">No leads yet.</div></td></tr>`}</tbody></table></div></section>`;}
-function leads(){const rows=S.leads.filter(l=>(S.leadFilter==='all'||(l.status||'new')===S.leadFilter)&&(!S.search||[l.name,l.phone,l.email,l.source].some(v=>String(v||'').toLowerCase().includes(S.search.toLowerCase()))));return `<div class="crm-toolbar"><div class="crm-search"><span>⌕</span><input id="lead-search" value="${esc(S.search)}" placeholder="Search name, phone or email…"></div><select id="lead-filter"><option value="all">All stages</option>${LEAD_STATUSES.map(x=>`<option value="${x}" ${S.leadFilter===x?'selected':''}>${label(x)}</option>`).join('')}</select><button class="crm-primary" id="add-lead">+ Add lead</button></div><section class="crm-card"><div class="crm-card-head"><div><h2>${rows.length} leads</h2><p>Edit status, contact details and notes.</p></div></div><div class="crm-table-wrap"><table><thead><tr><th>Lead</th><th>Phone</th><th>Source</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody>${rows.map(l=>`<tr><td><div class="crm-person"><span>${initials(l.name)}</span><div><b>${esc(l.name||'Unknown')}</b><small>${esc(l.email||'No email')}</small></div></div></td><td>${esc(l.phone||'—')}</td><td>${esc(l.source||'website')}</td><td><select class="crm-inline-select ${cls(l.status||'new')}" data-lead-status="${l.id}">${LEAD_STATUSES.map(x=>`<option value="${x}" ${l.status===x?'selected':''}>${label(x)}</option>`).join('')}</select></td><td>${date(l.created_at)}</td><td><button class="crm-small-btn" data-open-lead="${l.id}">Open</button></td></tr>`).join('')||`<tr><td colspan="6"><div class="crm-empty">No leads match this filter.</div></td></tr>`}</tbody></table></div></section>`;}
-function inbox(){const c=S.conversations.find(x=>x.id===S.active)||S.conversations[0];if(c&&!S.active)S.active=c.id;const lead=c?.leads;return `<div class="crm-inbox"><section class="crm-card crm-chat-list"><div class="crm-card-head"><div><h2>Conversations</h2><p>${S.conversations.length} threads</p></div></div><div class="crm-conversation-list">${S.conversations.map(x=>`<button class="crm-conversation ${S.active===x.id?'active':''}" data-conversation="${x.id}"><span class="crm-avatar">${initials(x.leads?.name||x.phone)}</span><div><b>${esc(x.leads?.name||x.phone)}</b><small>${esc(x.phone)}</small><em>${date(x.last_message_at)}</em></div><i class="${x.status==='open'?'open':''}"></i></button>`).join('')||`<div class="crm-empty">No WhatsApp conversations yet.</div>`}</div></section><section class="crm-card crm-chat"><div class="crm-chat-head">${c?`<div class="crm-person"><span>${initials(lead?.name||c.phone)}</span><div><b>${esc(lead?.name||c.phone)}</b><small>${esc(c.phone)} · ${label(c.status)}</small></div></div><div class="crm-chat-actions"><label class="crm-toggle"><input id="ai-toggle" type="checkbox" ${c.ai_enabled?'checked':''}><span></span> AI</label><button id="toggle-chat" class="crm-small-btn">${c.status==='open'?'Close':'Reopen'}</button></div>`:'<h2>Select a conversation</h2>'}</div><div id="chat-messages" class="crm-chat-messages">${c?(S.messages.length?S.messages.map(m=>`<div class="crm-message ${m.direction==='outbound'?'outbound':'inbound'}"><div>${esc(m.body||`[${m.message_type}]`)}</div><small>${date(m.created_at)}</small></div>`).join(''):`<div class="crm-empty">No messages.</div>`):`<div class="crm-empty">Select a customer.</div>`}</div>${c?`<form id="chat-form" class="crm-composer"><textarea id="chat-input" rows="2" placeholder="Type a WhatsApp reply…"></textarea><button class="crm-primary">Send</button></form>`:''}</section><aside class="crm-card crm-contact-card">${c?`<div class="crm-card-head"><div><h2>Customer</h2><p>Lead record</p></div></div><div class="crm-contact"><div class="crm-big-avatar">${initials(lead?.name||c.phone)}</div><h3>${esc(lead?.name||'Unknown')}</h3><p>${esc(lead?.phone||c.phone)}</p><p>${esc(lead?.email||'No email')}</p><span class="crm-badge ${cls(lead?.status||'new')}">${label(lead?.status||'new')}</span></div><div class="crm-contact-meta"><div><span>Source</span><b>${esc(lead?.source||'whatsapp')}</b></div><div><span>AI</span><b>${c.ai_enabled?'Enabled':'Human only'}</b></div><div><span>Notes</span><b>${esc(lead?.notes||'No notes')}</b></div></div>`:`<div class="crm-empty">Customer details appear here.</div>`}</aside></div>`;}
-function visits(){const rows=S.visits.filter(v=>S.visitFilter==='ALL'||v.status===S.visitFilter);return `<div class="crm-toolbar"><select id="visit-filter"><option value="ALL">All visit statuses</option>${VISIT_STATUSES.map(x=>`<option value="${x}" ${S.visitFilter===x?'selected':''}>${label(x)}</option>`).join('')}</select><button class="crm-primary" id="add-visit">+ Site visit request</button></div><section class="crm-card"><div class="crm-card-head"><div><h2>Site Visits</h2><p>AI may request; only the owner confirms.</p></div></div><div class="crm-table-wrap"><table><thead><tr><th>Customer</th><th>Property</th><th>Requested</th><th>Scheduled</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.map(v=>`<tr><td><div class="crm-person"><span>${initials(v.leads?.name)}</span><div><b>${esc(v.leads?.name||'Unknown')}</b><small>${esc(v.leads?.phone||'')}</small></div></div></td><td><b>${esc(v.properties?.title||v.properties?.property_code||'—')}</b><small class="crm-cell-sub">${esc(v.properties?.projects?.name||'')}</small></td><td>${date(v.requested_at)}</td><td>${date(v.scheduled_at)}</td><td><span class="crm-badge ${cls(v.status)}">${label(v.status)}</span></td><td>${v.status==='REQUESTED'||v.status==='RESCHEDULED'?`<button class="crm-action success" data-confirm-visit="${v.id}">Confirm</button> <button class="crm-action danger" data-cancel-visit="${v.id}">Cancel</button>`:v.status==='CONFIRMED'?`<button class="crm-action" data-complete-visit="${v.id}">Complete</button> <button class="crm-action" data-reschedule-visit="${v.id}">Reschedule</button>`:'—'}</td></tr>`).join('')||`<tr><td colspan="6"><div class="crm-empty">No site visits.</div></td></tr>`}</tbody></table></div></section>`;}
-function inventory(){const rows=S.inventory.filter(p=>S.inventoryFilter==='ALL'||p.inventory_status===S.inventoryFilter);return `<div class="crm-toolbar"><select id="inventory-filter"><option value="ALL">All inventory</option>${['AVAILABLE','RESERVED','BOOKED','SOLD'].map(x=>`<option value="${x}" ${S.inventoryFilter===x?'selected':''}>${label(x)}</option>`).join('')}</select><button class="crm-icon-btn" id="inventory-refresh">↻ Refresh</button></div><section class="crm-card"><div class="crm-card-head"><div><h2>Property Inventory</h2><p>Protected transitions: Available → Reserved → Booked → Sold.</p></div></div><div class="crm-table-wrap"><table><thead><tr><th>Property</th><th>Project</th><th>Type</th><th>Area</th><th>Status</th><th>Change</th></tr></thead><tbody>${rows.map(p=>`<tr><td><b>${esc(p.property_code)}</b><small class="crm-cell-sub">${esc(p.title||'')}</small></td><td>${esc(p.projects?.name||'—')}</td><td>${esc(p.property_type||'—')}</td><td>${p.area?`${esc(p.area)} ${esc(p.area_unit||'')}`:'—'}</td><td><span class="crm-badge ${cls(p.inventory_status)}">${label(p.inventory_status)}</span></td><td>${invSelect(p)}</td></tr>`).join('')||`<tr><td colspan="6"><div class="crm-empty">No inventory found.</div></td></tr>`}</tbody></table></div></section>`;}
-function invSelect(p){const next={AVAILABLE:['RESERVED'],RESERVED:['AVAILABLE','BOOKED'],BOOKED:['AVAILABLE','SOLD'],SOLD:[]}[p.inventory_status]||[];return next.length?`<select class="crm-inline-select ${cls(p.inventory_status)}" data-inventory="${p.id}"><option value="">Change…</option>${next.map(x=>`<option value="${x}">${label(x)}</option>`).join('')}</select>`:'<span class="crm-muted">Locked</span>';}
-function bookings(){const rows=S.bookings.filter(b=>S.bookingFilter==='ALL'||b.status===S.bookingFilter);return `<div class="crm-toolbar"><select id="booking-filter"><option value="ALL">All bookings</option>${BOOKING_STATUSES.map(x=>`<option value="${x}" ${S.bookingFilter===x?'selected':''}>${label(x)}</option>`).join('')}</select></div><section class="crm-card"><div class="crm-card-head"><div><h2>Bookings</h2><p>Reservation lifecycle and inventory protection.</p></div></div><div class="crm-table-wrap"><table><thead><tr><th>Customer</th><th>Property</th><th>Reference</th><th>Status</th><th>Amount</th><th>Action</th></tr></thead><tbody>${rows.map(b=>`<tr><td><div class="crm-person"><span>${initials(b.leads?.name)}</span><div><b>${esc(b.leads?.name||'Unknown')}</b><small>${esc(b.leads?.phone||'')}</small></div></div></td><td>${esc(b.properties?.property_code||'—')}</td><td>${esc(b.booking_reference||'—')}</td><td><span class="crm-badge ${cls(b.status)}">${label(b.status)}</span></td><td>${b.amount?`${esc(b.currency||'INR')} ${esc(b.amount)}`:'—'}</td><td>${b.status==='PENDING'?`<button class="crm-action success" data-booking-confirm="${b.id}">Confirm</button> <button class="crm-action danger" data-booking-cancel="${b.id}">Cancel</button>`:b.status==='CONFIRMED'?`<button class="crm-action" data-booking-complete="${b.id}">Complete</button> <button class="crm-action danger" data-booking-cancel="${b.id}">Cancel</button>`:'—'}</td></tr>`).join('')||`<tr><td colspan="6"><div class="crm-empty">No bookings.</div></td></tr>`}</tbody></table></div></section>`;}
-function body(){return ({overview,leads,inbox,visits,inventory,bookings}[S.tab]||overview)();}
-async function load(){const [a,b,c,d,e,f]=await Promise.all([api('/api/crm/summary'),api('/api/crm/leads'),api('/api/crm/conversations'),api('/api/crm/site-visits'),api('/api/crm/inventory'),api('/api/crm/bookings')]);S.summary=a;S.leads=b.leads||[];S.conversations=c.conversations||[];S.visits=d.visits||[];S.inventory=e.properties||[];S.bookings=f.bookings||[];}
-async function messages(id){S.active=id;const d=await api(`/api/crm/messages/${id}`);S.messages=d.messages||[];render();requestAnimationFrame(()=>{const x=document.getElementById('chat-messages');if(x)x.scrollTop=x.scrollHeight;});}
-function modal(html){document.getElementById('crm-modal')?.remove();document.body.insertAdjacentHTML('beforeend',`<div id="crm-modal" class="crm-modal-backdrop"><div class="crm-modal">${html}</div></div>`);document.querySelectorAll('[data-close]').forEach(x=>x.onclick=()=>document.getElementById('crm-modal')?.remove());}
-function leadModal(l){modal(`<button class="crm-modal-close" data-close>×</button><div class="crm-eyebrow">LEAD RECORD</div><h2>${l?'Edit lead':'Add lead'}</h2><form id="lead-form" class="crm-form"><label>Name<input name="name" required value="${esc(l?.name||'')}"></label><label>Phone<input name="phone" value="${esc(l?.phone||'')}" ${l?'readonly':''}></label><label>Email<input name="email" type="email" value="${esc(l?.email||'')}"></label><label>Source<input name="source" value="${esc(l?.source||'crm')}"></label><label>Status<select name="status">${LEAD_STATUSES.map(x=>`<option value="${x}" ${(l?.status||'new')===x?'selected':''}>${label(x)}</option>`).join('')}</select></label><label>Notes<textarea name="notes" rows="4">${esc(l?.notes||'')}</textarea></label><div class="crm-modal-actions"><button type="button" class="crm-small-btn" data-close>Cancel</button><button class="crm-primary">Save lead</button></div></form>`);document.getElementById('lead-form').onsubmit=async e=>{e.preventDefault();try{await api(l?`/api/crm/leads/${l.id}`:'/api/crm/leads',{method:l?'PATCH':'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});document.getElementById('crm-modal')?.remove();await load();render();}catch(x){showToast(x.message,true);}};}
-function visitModal(){const leads=S.leads.filter(x=>x.phone),props=S.inventory.filter(x=>x.inventory_status==='AVAILABLE');modal(`<button class="crm-modal-close" data-close>×</button><div class="crm-eyebrow">SITE VISIT</div><h2>Create request</h2><form id="visit-form" class="crm-form"><label>Lead<select name="lead_id" required>${leads.map(x=>`<option value="${x.id}">${esc(x.name||x.phone)} · ${esc(x.phone)}</option>`).join('')}</select></label><label>Property<select name="property_id" required>${props.map(x=>`<option value="${x.id}">${esc(x.property_code)} · ${esc(x.title||'')}</option>`).join('')}</select></label><label>Preferred date/time<input name="scheduled_at" type="datetime-local"></label><label>Notes<textarea name="notes" rows="3"></textarea></label><div class="crm-modal-actions"><button type="button" class="crm-small-btn" data-close>Cancel</button><button class="crm-primary">Create request</button></div></form>`);document.getElementById('visit-form').onsubmit=async e=>{e.preventDefault();try{await api('/api/crm/site-visits',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});document.getElementById('crm-modal')?.remove();await load();render();}catch(x){showToast(x.message,true);}};}
-function showToast(msg,error=false){const x=document.createElement('div');x.className='crm-toast'+(error?' error':'');x.textContent=msg;document.body.appendChild(x);setTimeout(()=>x.remove(),3500);}
-async function patchVisit(id,status,scheduled_at){try{await api(`/api/crm/site-visits/${id}`,{method:'PATCH',body:JSON.stringify({status,scheduled_at})});showToast(status==='CONFIRMED'?'Site visit confirmed & WhatsApp sent to customer!':'Site visit status updated.');await load();render();}catch(x){showToast(x.message,true);}}
-async function patchBooking(id,status){try{await api(`/api/crm/bookings/${id}`,{method:'PATCH',body:JSON.stringify({status})});showToast(status==='CONFIRMED'?'Booking confirmed & WhatsApp sent to customer!':'Booking status updated.');await load();render();}catch(x){showToast(x.message,true);}}
-function bind(){document.querySelectorAll('[data-tab]').forEach(x=>x.onclick=()=>{S.tab=x.dataset.tab;render();if(S.tab==='inbox'&&S.active)messages(S.active).catch(e=>showToast(e.message,true));});document.querySelectorAll('[data-go]').forEach(x=>x.onclick=()=>{S.tab=x.dataset.go;render();});document.getElementById('crm-logout')?.addEventListener('click',()=>{sessionStorage.removeItem('vr_crm_key');key='';if(timer)clearInterval(timer);login(document.getElementById('crm-root'));});document.getElementById('refresh')?.addEventListener('click',async()=>{try{await load();render();}catch(e){showToast(e.message,true);}});document.getElementById('lead-search')?.addEventListener('input',e=>{S.search=e.target.value;render();document.getElementById('lead-search')?.focus();});document.getElementById('lead-filter')?.addEventListener('change',e=>{S.leadFilter=e.target.value;render();});document.getElementById('visit-filter')?.addEventListener('change',e=>{S.visitFilter=e.target.value;render();});document.getElementById('inventory-filter')?.addEventListener('change',e=>{S.inventoryFilter=e.target.value;render();});document.getElementById('booking-filter')?.addEventListener('change',e=>{S.bookingFilter=e.target.value;render();});document.getElementById('add-lead')?.addEventListener('click',()=>leadModal());document.getElementById('add-visit')?.addEventListener('click',visitModal);document.querySelectorAll('[data-open-lead]').forEach(x=>x.onclick=()=>{const l=S.leads.find(y=>y.id===x.dataset.openLead);if(l)leadModal(l);});document.querySelectorAll('[data-lead-status]').forEach(x=>x.onchange=async()=>{try{await api(`/api/crm/leads/${x.dataset.leadStatus}`,{method:'PATCH',body:JSON.stringify({status:x.value})});await load();render();}catch(e){showToast(e.message,true);}});document.querySelectorAll('[data-conversation]').forEach(x=>x.onclick=()=>messages(x.dataset.conversation).catch(e=>showToast(e.message,true)));document.getElementById('ai-toggle')?.addEventListener('change',async e=>{try{await api(`/api/crm/conversations/${S.active}`,{method:'PATCH',body:JSON.stringify({ai_enabled:e.target.checked})});await load();render();await messages(S.active);}catch(x){showToast(x.message,true);}});document.getElementById('toggle-chat')?.addEventListener('click',async()=>{const c=S.conversations.find(x=>x.id===S.active);try{await api(`/api/crm/conversations/${S.active}`,{method:'PATCH',body:JSON.stringify({status:c?.status==='open'?'closed':'open'})});await load();render();await messages(S.active);}catch(x){showToast(x.message,true);}});document.getElementById('chat-form')?.addEventListener('submit',async e=>{e.preventDefault();const input=document.getElementById('chat-input'),text=input.value.trim();if(!text)return;input.disabled=true;try{await api(`/api/crm/messages/${S.active}`,{method:'POST',body:JSON.stringify({body:text})});input.value='';await messages(S.active);}catch(x){showToast(x.message,true);}finally{input.disabled=false;}});document.querySelectorAll('[data-inventory]').forEach(x=>x.onchange=async()=>{if(!x.value)return;const p=S.inventory.find(y=>y.id===x.dataset.inventory);const reason=prompt(`Reason for ${p?.property_code||'inventory'} → ${label(x.value)}:`)||'CRM inventory update';try{await api(`/api/crm/inventory/${x.dataset.inventory}`,{method:'PATCH',body:JSON.stringify({status:x.value,reason})});await load();render();}catch(e){x.value='';showToast(e.message,true);}});document.querySelectorAll('[data-confirm-visit]').forEach(x=>x.onclick=async()=>{const v=S.visits.find(y=>y.id===x.dataset.confirmVisit);let at=v?.scheduled_at;if(!at){at=prompt('Enter confirmation date/time (example: 2026-09-10 11:00):');if(!at)return;}await patchVisit(v.id,'CONFIRMED',at);});document.querySelectorAll('[data-cancel-visit]').forEach(x=>x.onclick=async()=>{if(confirm('Cancel this site visit?'))await patchVisit(x.dataset.cancelVisit,'CANCELLED');});document.querySelectorAll('[data-complete-visit]').forEach(x=>x.onclick=()=>patchVisit(x.dataset.completeVisit,'COMPLETED'));document.querySelectorAll('[data-reschedule-visit]').forEach(x=>x.onclick=async()=>{const at=prompt('New date/time:');if(at)await patchVisit(x.dataset.rescheduleVisit,'RESCHEDULED',at);});document.querySelectorAll('[data-booking-confirm]').forEach(x=>x.onclick=()=>patchBooking(x.dataset.bookingConfirm,'CONFIRMED'));document.querySelectorAll('[data-booking-complete]').forEach(x=>x.onclick=()=>patchBooking(x.dataset.bookingComplete,'COMPLETED'));document.querySelectorAll('[data-booking-cancel]').forEach(x=>x.onclick=async()=>{if(confirm('Cancel this booking and release inventory?'))await patchBooking(x.dataset.bookingCancel,'CANCELLED');});}
-function render(){const root=document.getElementById('crm-root');if(root){root.innerHTML=shell(body());bind();if(S.tab==='inbox'&&S.active&&!S.messages.length)messages(S.active).catch(e=>showToast(e.message,true));}}
-function start(){if(timer)clearInterval(timer);timer=setInterval(async()=>{try{await load();render();}catch(e){console.warn('[crm]',e.message);}},30000);}
-export function renderCrmPage(){return {html:'<div id="crm-root"></div>',init:()=>{const root=document.getElementById('crm-root');if(!key)return login(root);load().then(()=>{render();start();}).catch(e=>login(root,e.message));}};}
+
+function syncPlotOverride(propertyId, status) {
+  try {
+    const overrides = JSON.parse(localStorage.getItem('vr_plot_status_overrides') || '{}');
+    overrides[propertyId] = status;
+    localStorage.setItem('vr_plot_status_overrides', JSON.stringify(overrides));
+    window.dispatchEvent(new CustomEvent('vr_plot_status_changed', { detail: { propertyId, status } }));
+  } catch (e) {
+    console.warn('[crm] syncPlotOverride error:', e);
+  }
+}
+
+function login(root, msg = '') {
+  root.innerHTML = `
+    <main class="crm-shell crm-login">
+      <div class="crm-login-card">
+        <div class="crm-brand">Real Estate Brothers group</div>
+        <h1>Sales CRM</h1>
+        <p>Private workspace for enquiries, leads, WhatsApp conversations, site visits, bookings and inventory.</p>
+        ${msg ? `<div class="crm-error">${esc(msg)}</div>` : ''}
+        <form id="crm-login-form">
+          <label>CRM access key
+            <input id="crm-key" type="password" required autocomplete="current-password">
+          </label>
+          <button class="crm-primary">Open CRM</button>
+        </form>
+        <a class="crm-back" href="#/">← Back to website</a>
+      </div>
+    </main>
+  `;
+  document.getElementById('crm-login-form').onsubmit = async (e) => {
+    e.preventDefault();
+    key = document.getElementById('crm-key').value.trim();
+    try {
+      await api('/api/crm/summary');
+      sessionStorage.setItem('vr_crm_key', key);
+      await load();
+      render();
+      start();
+    } catch (x) {
+      key = '';
+      login(root, x.message);
+    }
+  };
+}
+
+function shell(bodyContent) {
+  const nav = [
+    ['overview', 'Overview', '▦'],
+    ['enquiries', 'Enquiries', '✉'],
+    ['leads', 'Leads', '◉'],
+    ['inbox', 'WhatsApp Inbox', '◌'],
+    ['visits', 'Site Visits', '⌖'],
+    ['inventory', 'Inventory', '▤'],
+    ['bookings', 'Bookings', '✓'],
+    ['reminders', 'Reminders', '⏰']
+  ];
+
+  const descMap = {
+    overview: 'A single view of sales activity and performance.',
+    enquiries: 'Customer enquiries from website forms, modals, and property showcases.',
+    leads: 'Track every lead from first contact to qualification and conversion.',
+    inbox: 'Manage customer conversations and hand off between AI and human agents.',
+    visits: 'Review requests and confirm visits only when the owner approves. (Visits do not hold plots)',
+    inventory: 'Control live property availability and record offline customer bookings.',
+    bookings: 'Track reservations and confirmed offline/online bookings.',
+    reminders: 'Configure automated WhatsApp/SMS visit reminder rules.'
+  };
+
+  return `
+    <main class="crm-app">
+      <aside class="crm-sidebar">
+        <div class="crm-side-brand">
+          <img src="/images/vr-logo.png" alt="Logo" class="crm-logo-img" style="width:36px;height:36px;border-radius:50%;object-fit:contain;margin-right:10px;" />
+          <div>
+            <b>Real Estate Brothers group</b>
+            <span>Sales CRM</span>
+          </div>
+        </div>
+        <nav>
+          ${nav.map((n) => `
+            <button class="crm-nav ${S.tab === n[0] ? 'active' : ''}" data-tab="${n[0]}">
+              <i>${n[2]}</i>
+              <span>${n[1]}</span>
+              ${n[0] === 'visits' && S.summary?.siteVisitRequests ? `<em>${S.summary.siteVisitRequests}</em>` : ''}
+              ${n[0] === 'enquiries' && S.leads.filter((l) => (l.status || 'new') === 'new').length ? `<em>${S.leads.filter((l) => (l.status || 'new') === 'new').length}</em>` : ''}
+            </button>
+          `).join('')}
+        </nav>
+        <div class="crm-side-footer">
+          <div class="crm-secure">● CRM secure</div>
+          <button id="crm-logout">Logout</button>
+          <a href="#/">Open website</a>
+        </div>
+      </aside>
+      <section class="crm-main">
+        <header class="crm-header">
+          <div>
+            <div class="crm-eyebrow">Real Estate Brothers group · OPERATIONS</div>
+            <h1>${label(S.tab)}</h1>
+            <p>${descMap[S.tab] || 'Manage operations'}</p>
+          </div>
+          <div class="crm-header-actions">
+            <button class="crm-icon-btn" id="refresh">↻</button>
+            <span class="crm-sync">● Live</span>
+          </div>
+        </header>
+        ${bodyContent}
+      </section>
+    </main>
+  `;
+}
+
+function stat(t, v, m, i) {
+  return `
+    <article class="crm-stat">
+      <div class="crm-stat-icon">${i}</div>
+      <div>
+        <span>${t}</span>
+        <strong>${v}</strong>
+        <small>${m}</small>
+      </div>
+    </article>
+  `;
+}
+
+function overview() {
+  const s = S.summary || {};
+  const i = s.inventory || {};
+  return `
+    <div class="crm-stats">
+      ${stat('Total Enquiries / Leads', s.totalLeads || 0, `${s.newLeads || 0} new`, '✉')}
+      ${stat('Open WhatsApp', s.openConversations || 0, 'needs attention', '◌')}
+      ${stat('Visit Requests', s.siteVisitRequests || 0, `${s.confirmedVisits || 0} confirmed`, '⌖')}
+      ${stat('Qualified Leads', s.qualifiedLeads || 0, 'sales-ready', '★')}
+    </div>
+    <div class="crm-overview-grid">
+      <section class="crm-card">
+        <div class="crm-card-head">
+          <div>
+            <h2>Lead Pipeline</h2>
+            <p>Current sales stages</p>
+          </div>
+          <button class="crm-link" data-go="leads">View all →</button>
+        </div>
+        <div class="crm-pipeline">
+          ${LEAD_STATUSES.map((x) => {
+            const n = S.leads.filter((l) => (l.status || 'new') === x).length;
+            return `
+              <div>
+                <span>${label(x)}</span>
+                <strong>${n}</strong>
+                <div class="crm-bar">
+                  <i style="width:${Math.min(100, (n / Math.max(1, S.leads.length)) * 100)}%"></i>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </section>
+      <section class="crm-card">
+        <div class="crm-card-head">
+          <div>
+            <h2>Inventory</h2>
+            <p>Database source of truth</p>
+          </div>
+          <button class="crm-link" data-go="inventory">Manage →</button>
+        </div>
+        <div class="crm-inventory-summary">
+          ${[['available', i.available || 0], ['reserved', i.reserved || 0], ['booked', i.booked || 0], ['sold', i.sold || 0]].map((x) => `
+            <div>
+              <strong>${x[1]}</strong>
+              <span>${label(x[0])}</span>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+    </div>
+    <section class="crm-card">
+      <div class="crm-card-head">
+        <div>
+          <h2>Recent Enquiries</h2>
+          <p>Latest customer interest</p>
+        </div>
+        <button class="crm-link" data-go="enquiries">View all →</button>
+      </div>
+      <div class="crm-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Phone</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${S.leads.slice(0, 8).map((l) => `
+              <tr data-open-lead="${l.id}">
+                <td>
+                  <div class="crm-person">
+                    <span>${initials(l.name)}</span>
+                    <div>
+                      <b>${esc(l.name || 'Unknown')}</b>
+                      <small>${esc(l.email || 'No email')}</small>
+                    </div>
+                  </div>
+                </td>
+                <td>${esc(l.phone || '—')}</td>
+                <td>${esc(l.source || 'website')}</td>
+                <td><span class="crm-badge ${cls(l.status || 'new')}">${label(l.status || 'new')}</span></td>
+                <td>${date(l.updated_at)}</td>
+              </tr>
+            `).join('') || `<tr><td colspan="5"><div class="crm-empty">No leads yet.</div></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function enquiries() {
+  const q = S.search.toLowerCase();
+  const rows = S.leads.filter((l) => {
+    if (q && ![l.name, l.phone, l.email, l.source, l.notes].some((v) => String(v || '').toLowerCase().includes(q))) return false;
+    return true;
+  });
+
+  return `
+    <div class="crm-toolbar">
+      <div class="crm-search">
+        <span>⌕</span>
+        <input id="enquiry-search" value="${esc(S.search)}" placeholder="Search customer, phone, property or enquiry message…">
+      </div>
+      <button class="crm-primary" id="add-lead">+ Add Enquiry</button>
+    </div>
+    <section class="crm-card">
+      <div class="crm-card-head">
+        <div>
+          <h2>${rows.length} Enquiries</h2>
+          <p>Customer submissions from contact forms, modal brochures, and plot view enquiries.</p>
+        </div>
+      </div>
+      <div class="crm-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Phone</th>
+              <th>Source</th>
+              <th>Enquiry Details / Notes</th>
+              <th>Status</th>
+              <th>Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="enquiries-table-body">
+            ${renderEnquiryRows(rows)}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function renderEnquiryRows(rows) {
+  if (!rows.length) {
+    return `<tr><td colspan="7"><div class="crm-empty">No enquiries match your search.</div></td></tr>`;
+  }
+  return rows.map((l) => `
+    <tr>
+      <td>
+        <div class="crm-person">
+          <span>${initials(l.name)}</span>
+          <div>
+            <b>${esc(l.name || 'Unknown')}</b>
+            <small>${esc(l.email || 'No email')}</small>
+          </div>
+        </div>
+      </td>
+      <td>
+        <a href="https://wa.me/${String(l.phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" style="color: #128C7E; font-weight: 700; text-decoration: none;">
+          ${esc(l.phone || '—')}
+        </a>
+      </td>
+      <td><span class="crm-badge">${esc(l.source || 'Website Form')}</span></td>
+      <td style="max-width: 280px; white-space: normal; line-height: 1.45;">
+        ${esc(l.notes || 'General enquiry')}
+      </td>
+      <td>
+        <select class="crm-inline-select ${cls(l.status || 'new')}" data-lead-status="${l.id}">
+          ${LEAD_STATUSES.map((x) => `<option value="${x}" ${(l.status || 'new') === x ? 'selected' : ''}>${label(x)}</option>`).join('')}
+        </select>
+      </td>
+      <td>${date(l.created_at)}</td>
+      <td>
+        <div style="display: flex; gap: 6px;">
+          <button class="crm-small-btn" data-convert-visit="${l.id}" title="Book Site Visit for this lead">📅 Visit</button>
+          <button class="crm-small-btn" data-open-lead="${l.id}">Edit</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function leads() {
+  const q = S.search.toLowerCase();
+  const rows = S.leads.filter((l) =>
+    (S.leadFilter === 'all' || (l.status || 'new') === S.leadFilter) &&
+    (!q || [l.name, l.phone, l.email, l.source, l.notes].some((v) => String(v || '').toLowerCase().includes(q)))
+  );
+
+  return `
+    <div class="crm-toolbar">
+      <div class="crm-search">
+        <span>⌕</span>
+        <input id="lead-search" value="${esc(S.search)}" placeholder="Search name, phone or email…">
+      </div>
+      <select id="lead-filter">
+        <option value="all">All stages</option>
+        ${LEAD_STATUSES.map((x) => `<option value="${x}" ${S.leadFilter === x ? 'selected' : ''}>${label(x)}</option>`).join('')}
+      </select>
+      <button class="crm-primary" id="add-lead">+ Add lead</button>
+    </div>
+    <section class="crm-card">
+      <div class="crm-card-head">
+        <div>
+          <h2>${rows.length} leads</h2>
+          <p>Edit status, contact details and pipeline progress.</p>
+        </div>
+      </div>
+      <div class="crm-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Lead</th>
+              <th>Phone</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="leads-table-body">
+            ${renderLeadRows(rows)}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function renderLeadRows(rows) {
+  if (!rows.length) {
+    return `<tr><td colspan="6"><div class="crm-empty">No leads match this filter.</div></td></tr>`;
+  }
+  return rows.map((l) => `
+    <tr>
+      <td>
+        <div class="crm-person">
+          <span>${initials(l.name)}</span>
+          <div>
+            <b>${esc(l.name || 'Unknown')}</b>
+            <small>${esc(l.email || 'No email')}</small>
+          </div>
+        </div>
+      </td>
+      <td>${esc(l.phone || '—')}</td>
+      <td>${esc(l.source || 'website')}</td>
+      <td>
+        <select class="crm-inline-select ${cls(l.status || 'new')}" data-lead-status="${l.id}">
+          ${LEAD_STATUSES.map((x) => `<option value="${x}" ${(l.status || 'new') === x ? 'selected' : ''}>${label(x)}</option>`).join('')}
+        </select>
+      </td>
+      <td>${date(l.created_at)}</td>
+      <td>
+        <button class="crm-small-btn" data-open-lead="${l.id}">Open</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function inbox() {
+  const c = S.conversations.find((x) => x.id === S.active) || S.conversations[0];
+  if (c && !S.active) S.active = c.id;
+  const lead = c?.leads;
+  return `
+    <div class="crm-inbox">
+      <section class="crm-card crm-chat-list">
+        <div class="crm-card-head">
+          <div>
+            <h2>Conversations</h2>
+            <p>${S.conversations.length} threads</p>
+          </div>
+        </div>
+        <div class="crm-conversation-list">
+          ${S.conversations.map((x) => `
+            <button class="crm-conversation ${S.active === x.id ? 'active' : ''}" data-conversation="${x.id}">
+              <span class="crm-avatar">${initials(x.leads?.name || x.phone)}</span>
+              <div>
+                <b>${esc(x.leads?.name || x.phone)}</b>
+                <small>${esc(x.phone)}</small>
+                <em>${date(x.last_message_at)}</em>
+              </div>
+              <i class="${x.status === 'open' ? 'open' : ''}"></i>
+            </button>
+          `).join('') || `<div class="crm-empty">No WhatsApp conversations yet.</div>`}
+        </div>
+      </section>
+      <section class="crm-card crm-chat">
+        <div class="crm-chat-head">
+          ${c ? `
+            <div class="crm-person">
+              <span>${initials(lead?.name || c.phone)}</span>
+              <div>
+                <b>${esc(lead?.name || c.phone)}</b>
+                <small>${esc(c.phone)} · ${label(c.status)}</small>
+              </div>
+            </div>
+            <div class="crm-chat-actions">
+              <label class="crm-toggle">
+                <input id="ai-toggle" type="checkbox" ${c.ai_enabled ? 'checked' : ''}>
+                <span></span> AI
+              </label>
+              <button id="toggle-chat" class="crm-small-btn">${c.status === 'open' ? 'Close' : 'Reopen'}</button>
+            </div>
+          ` : '<h2>Select a conversation</h2>'}
+        </div>
+        <div id="chat-messages" class="crm-chat-messages">
+          ${c ? (S.messages.length ? S.messages.map((m) => `
+            <div class="crm-message ${m.direction === 'outbound' ? 'outbound' : 'inbound'}">
+              <div>${esc(m.body || `[${m.message_type}]`)}</div>
+              <small>${date(m.created_at)}</small>
+            </div>
+          `).join('') : `<div class="crm-empty">No messages.</div>`) : `<div class="crm-empty">Select a customer.</div>`}
+        </div>
+        ${c ? `
+          <form id="chat-form" class="crm-composer">
+            <textarea id="chat-input" rows="2" placeholder="Type a WhatsApp reply…"></textarea>
+            <button class="crm-primary">Send</button>
+          </form>
+        ` : ''}
+      </section>
+      <aside class="crm-card crm-contact-card">
+        ${c ? `
+          <div class="crm-card-head">
+            <div>
+              <h2>Customer</h2>
+              <p>Lead record</p>
+            </div>
+          </div>
+          <div class="crm-contact">
+            <div class="crm-big-avatar">${initials(lead?.name || c.phone)}</div>
+            <h3>${esc(lead?.name || 'Unknown')}</h3>
+            <p>${esc(lead?.phone || c.phone)}</p>
+            <p>${esc(lead?.email || 'No email')}</p>
+            <span class="crm-badge ${cls(lead?.status || 'new')}">${label(lead?.status || 'new')}</span>
+          </div>
+          <div class="crm-contact-meta">
+            <div><span>Source</span><b>${esc(lead?.source || 'whatsapp')}</b></div>
+            <div><span>AI</span><b>${c.ai_enabled ? 'Enabled' : 'Human only'}</b></div>
+            <div><span>Notes</span><b>${esc(lead?.notes || 'No notes')}</b></div>
+          </div>
+        ` : `<div class="crm-empty">Customer details appear here.</div>`}
+      </aside>
+    </div>
+  `;
+}
+
+function visits() {
+  const rows = S.visits.filter((v) => S.visitFilter === 'ALL' || v.status === S.visitFilter);
+  return `
+    <div class="crm-toolbar">
+      <select id="visit-filter">
+        <option value="ALL">All visit statuses</option>
+        ${VISIT_STATUSES.map((x) => `<option value="${x}" ${S.visitFilter === x ? 'selected' : ''}>${label(x)}</option>`).join('')}
+      </select>
+      <button class="crm-primary" id="add-visit">+ Site visit request</button>
+    </div>
+    <section class="crm-card">
+      <div class="crm-card-head">
+        <div>
+          <h2>Site Visits</h2>
+          <p>Customer requests. Confirming a visit dispatches WhatsApp notification and does NOT alter plot status.</p>
+        </div>
+      </div>
+      <div class="crm-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Property</th>
+              <th>Requested</th>
+              <th>Scheduled</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((v) => `
+              <tr>
+                <td>
+                  <div class="crm-person">
+                    <span>${initials(v.leads?.name)}</span>
+                    <div>
+                      <b>${esc(v.leads?.name || 'Unknown')}</b>
+                      <small>${esc(v.leads?.phone || '')}</small>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <b>${esc(v.properties?.title || v.properties?.property_code || '—')}</b>
+                  <small class="crm-cell-sub">${esc(v.properties?.projects?.name || '')}</small>
+                </td>
+                <td>${date(v.requested_at)}</td>
+                <td>${date(v.scheduled_at)}</td>
+                <td><span class="crm-badge ${cls(v.status)}">${label(v.status)}</span></td>
+                <td>
+                  ${v.status === 'REQUESTED' || v.status === 'RESCHEDULED' ? `
+                    <button class="crm-action success" data-confirm-visit="${v.id}">Confirm</button>
+                    <button class="crm-action danger" data-cancel-visit="${v.id}">Cancel</button>
+                  ` : v.status === 'CONFIRMED' ? `
+                    <button class="crm-action" data-complete-visit="${v.id}">Complete</button>
+                    <button class="crm-action" data-reschedule-visit="${v.id}">Reschedule</button>
+                  ` : '—'}
+                </td>
+              </tr>
+            `).join('') || `<tr><td colspan="6"><div class="crm-empty">No site visits.</div></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function inventory() {
+  const rows = S.inventory.filter((p) => S.inventoryFilter === 'ALL' || p.inventory_status === S.inventoryFilter);
+  return `
+    <div class="crm-toolbar">
+      <select id="inventory-filter">
+        <option value="ALL">All inventory</option>
+        ${['AVAILABLE', 'RESERVED', 'BOOKED', 'SOLD'].map((x) => `<option value="${x}" ${S.inventoryFilter === x ? 'selected' : ''}>${label(x)}</option>`).join('')}
+      </select>
+      <button class="crm-primary" id="add-offline-booking">+ Add Offline Customer</button>
+      <button class="crm-icon-btn" id="inventory-refresh">↻ Refresh</button>
+    </div>
+    <section class="crm-card">
+      <div class="crm-card-head">
+        <div>
+          <h2>Property Inventory &amp; Master Plan</h2>
+          <p>Protected transitions: Available → Reserved/Hold → Booked → Sold. Changes instantly sync with public master plan.</p>
+        </div>
+      </div>
+      <div class="crm-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Property</th>
+              <th>Project</th>
+              <th>Type</th>
+              <th>Area</th>
+              <th>Status</th>
+              <th>Status Action</th>
+              <th>Offline Booking</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((p) => `
+              <tr>
+                <td>
+                  <b>${esc(p.property_code)}</b>
+                  <small class="crm-cell-sub">${esc(p.title || '')}</small>
+                </td>
+                <td>${esc(p.projects?.name || '—')}</td>
+                <td>${esc(p.property_type || '—')}</td>
+                <td>${p.area ? `${esc(p.area)} ${esc(p.area_unit || '')}` : '—'}</td>
+                <td><span class="crm-badge ${cls(p.inventory_status)}">${label(p.inventory_status)}</span></td>
+                <td>${invSelect(p)}</td>
+                <td>
+                  ${p.inventory_status === 'AVAILABLE' || p.inventory_status === 'RESERVED' ? `
+                    <button class="crm-small-btn" data-offline-book="${p.id}">+ Book Customer</button>
+                  ` : '<span class="crm-muted">Allocated</span>'}
+                </td>
+              </tr>
+            `).join('') || `<tr><td colspan="7"><div class="crm-empty">No inventory found.</div></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function invSelect(p) {
+  const next = {
+    AVAILABLE: ['RESERVED', 'BOOKED'],
+    RESERVED: ['AVAILABLE', 'BOOKED'],
+    BOOKED: ['AVAILABLE', 'SOLD'],
+    SOLD: ['AVAILABLE']
+  }[p.inventory_status] || [];
+  return next.length
+    ? `<select class="crm-inline-select ${cls(p.inventory_status)}" data-inventory="${p.id}"><option value="">Change…</option>${next.map((x) => `<option value="${x}">${label(x)}</option>`).join('')}</select>`
+    : '<span class="crm-muted">Locked</span>';
+}
+
+function bookings() {
+  const rows = S.bookings.filter((b) => S.bookingFilter === 'ALL' || b.status === S.bookingFilter);
+  return `
+    <div class="crm-toolbar">
+      <select id="booking-filter">
+        <option value="ALL">All bookings</option>
+        ${BOOKING_STATUSES.map((x) => `<option value="${x}" ${S.bookingFilter === x ? 'selected' : ''}>${label(x)}</option>`).join('')}
+      </select>
+    </div>
+    <section class="crm-card">
+      <div class="crm-card-head">
+        <div>
+          <h2>Bookings &amp; Reservations</h2>
+          <p>Confirmed customer plot bookings and payment records.</p>
+        </div>
+      </div>
+      <div class="crm-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Property</th>
+              <th>Reference</th>
+              <th>Status</th>
+              <th>Amount</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((b) => `
+              <tr>
+                <td>
+                  <div class="crm-person">
+                    <span>${initials(b.leads?.name)}</span>
+                    <div>
+                      <b>${esc(b.leads?.name || 'Unknown')}</b>
+                      <small>${esc(b.leads?.phone || '')}</small>
+                    </div>
+                  </div>
+                </td>
+                <td>${esc(b.properties?.property_code || '—')}</td>
+                <td>${esc(b.booking_reference || '—')}</td>
+                <td><span class="crm-badge ${cls(b.status)}">${label(b.status)}</span></td>
+                <td>${b.amount ? `${esc(b.currency || 'INR')} ${esc(b.amount)}` : '—'}</td>
+                <td>
+                  ${b.status === 'PENDING' ? `
+                    <button class="crm-action success" data-booking-confirm="${b.id}">Confirm</button>
+                    <button class="crm-action danger" data-booking-cancel="${b.id}">Cancel</button>
+                  ` : b.status === 'CONFIRMED' ? `
+                    <button class="crm-action" data-booking-complete="${b.id}">Complete</button>
+                    <button class="crm-action danger" data-booking-cancel="${b.id}">Cancel</button>
+                  ` : '—'}
+                </td>
+              </tr>
+            `).join('') || `<tr><td colspan="6"><div class="crm-empty">No bookings.</div></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function reminders() {
+  const currentSettings = JSON.parse(localStorage.getItem('vr_crm_reminder_settings') || '{"remind48":true,"remind24":true,"remindDay":true}');
+  return `
+    <div class="crm-toolbar">
+      <span class="crm-eyebrow">AUTOMATED WORKFLOWS</span>
+    </div>
+    <div style="display: grid; grid-template-columns: minmax(320px, 600px) 1fr; gap: 24px;">
+      <section class="crm-card">
+        <div class="crm-card-head">
+          <div>
+            <h2>Site Visit Reminder Rules</h2>
+            <p>Configure automated WhatsApp reminders sent to visitors.</p>
+          </div>
+        </div>
+        <div style="padding: 24px;">
+          <form id="reminder-settings-form" class="crm-form">
+            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+              <input type="checkbox" id="remind-48" ${currentSettings.remind48 ? 'checked' : ''} style="margin-top: 3px;" />
+              <div>
+                <strong>48 Hours Prior Reminder</strong>
+                <p style="margin: 2px 0 0; color: #6B7280; font-size: 0.85rem;">Send early confirmation 2 days before the scheduled site visit date.</p>
+              </div>
+            </label>
+            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; margin-top: 12px;">
+              <input type="checkbox" id="remind-24" ${currentSettings.remind24 ? 'checked' : ''} style="margin-top: 3px;" />
+              <div>
+                <strong>24 Hours Prior Reminder (Recommended)</strong>
+                <p style="margin: 2px 0 0; color: #6B7280; font-size: 0.85rem;">Send 1-day reminder with executive contact and driving route details.</p>
+              </div>
+            </label>
+            <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; margin-top: 12px;">
+              <input type="checkbox" id="remind-day" ${currentSettings.remindDay ? 'checked' : ''} style="margin-top: 3px;" />
+              <div>
+                <strong>Day-of-Visit Morning Alert</strong>
+                <p style="margin: 2px 0 0; color: #6B7280; font-size: 0.85rem;">Send morning WhatsApp message 2 hours prior with site coordinator phone and Google pin.</p>
+              </div>
+            </label>
+
+            <div style="margin-top: 24px; padding: 14px; background: #FEF3C7; border: 1px solid #F59E0B; border-radius: 10px; color: #92400E; font-size: 0.85rem; line-height: 1.5;">
+              <strong>CRITICAL NOTICE:</strong> Site visit reminders are purely for customer communication. Site visits NEVER alter plot inventory status, and there is strictly <strong>no automatic hold expiry</strong>.
+            </div>
+
+            <div style="margin-top: 20px;">
+              <button type="submit" class="crm-primary">Save Reminder Preferences</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section class="crm-card">
+        <div class="crm-card-head">
+          <div>
+            <h2>Message Preview</h2>
+            <p>Sample message delivered to customer</p>
+          </div>
+        </div>
+        <div style="padding: 24px; background: #F0FDF4; border-radius: 0 0 16px 16px;">
+          <div style="background: #FFFFFF; border: 1px solid #DCFCE7; border-radius: 12px; padding: 16px; font-size: 0.9rem; line-height: 1.6; color: #1F2937; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+            <div style="font-weight: 700; color: #166534; margin-bottom: 8px;">Real Estate Brothers group — Site Visit Reminder 📍</div>
+            <p style="margin: 0 0 8px;">Hello <strong>Ramesh Varma</strong>,</p>
+            <p style="margin: 0 0 8px;">This is a quick reminder of your upcoming site visit to <strong>Amodha Open Plots, Shadnagar</strong> scheduled for <strong>Tomorrow, 11:00 AM</strong>.</p>
+            <p style="margin: 0 0 8px;">Our site coordinator, Mr. Suresh, will welcome you at the entrance arch.</p>
+            <p style="margin: 0; font-size: 0.82rem; color: #4B5563;">Need pickup or rescheduling? Reply directly to this WhatsApp message.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function body() {
+  return ({
+    overview,
+    enquiries,
+    leads,
+    inbox,
+    visits,
+    inventory,
+    bookings,
+    reminders
+  }[S.tab] || overview)();
+}
+
+async function load() {
+  const [a, b, c, d, e, f] = await Promise.all([
+    api('/api/crm/summary'),
+    api('/api/crm/leads'),
+    api('/api/crm/conversations'),
+    api('/api/crm/site-visits'),
+    api('/api/crm/inventory'),
+    api('/api/crm/bookings')
+  ]);
+  S.summary = a;
+  S.leads = b.leads || [];
+  S.conversations = c.conversations || [];
+  S.visits = d.visits || [];
+  S.inventory = e.properties || [];
+  S.bookings = f.bookings || [];
+}
+
+async function messages(id) {
+  S.active = id;
+  const d = await api(`/api/crm/messages/${id}`);
+  S.messages = d.messages || [];
+  render();
+  requestAnimationFrame(() => {
+    const x = document.getElementById('chat-messages');
+    if (x) x.scrollTop = x.scrollHeight;
+  });
+}
+
+function modal(html) {
+  document.getElementById('crm-modal')?.remove();
+  document.body.insertAdjacentHTML(
+    'beforeend',
+    `<div id="crm-modal" class="crm-modal-backdrop"><div class="crm-modal">${html}</div></div>`
+  );
+  document.querySelectorAll('[data-close]').forEach((x) => (x.onclick = () => document.getElementById('crm-modal')?.remove()));
+}
+
+function leadModal(l) {
+  modal(`
+    <button class="crm-modal-close" data-close>×</button>
+    <div class="crm-eyebrow">LEAD RECORD</div>
+    <h2>${l ? 'Edit lead' : 'Add lead'}</h2>
+    <form id="lead-form" class="crm-form">
+      <label>Name
+        <input name="name" required value="${esc(l?.name || '')}">
+      </label>
+      <label>Phone
+        <input name="phone" value="${esc(l?.phone || '')}" ${l ? 'readonly' : ''}>
+      </label>
+      <label>Email
+        <input name="email" type="email" value="${esc(l?.email || '')}">
+      </label>
+      <label>Source
+        <input name="source" value="${esc(l?.source || 'crm')}">
+      </label>
+      <label>Status
+        <select name="status">
+          ${LEAD_STATUSES.map((x) => `<option value="${x}" ${(l?.status || 'new') === x ? 'selected' : ''}>${label(x)}</option>`).join('')}
+        </select>
+      </label>
+      <label>Notes
+        <textarea name="notes" rows="4">${esc(l?.notes || '')}</textarea>
+      </label>
+      <div class="crm-modal-actions">
+        <button type="button" class="crm-small-btn" data-close>Cancel</button>
+        <button class="crm-primary">Save lead</button>
+      </div>
+    </form>
+  `);
+  document.getElementById('lead-form').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api(l ? `/api/crm/leads/${l.id}` : '/api/crm/leads', {
+        method: l ? 'PATCH' : 'POST',
+        body: JSON.stringify(Object.fromEntries(new FormData(e.target)))
+      });
+      document.getElementById('crm-modal')?.remove();
+      await load();
+      render();
+    } catch (x) {
+      showToast(x.message, true);
+    }
+  };
+}
+
+function visitModal(preselectedLeadId = '') {
+  const leads = S.leads.filter((x) => x.phone);
+  const props = S.inventory.filter((x) => x.inventory_status === 'AVAILABLE' || x.inventory_status === 'RESERVED');
+  modal(`
+    <button class="crm-modal-close" data-close>×</button>
+    <div class="crm-eyebrow">SITE VISIT</div>
+    <h2>Create Site Visit Request</h2>
+    <form id="visit-form" class="crm-form">
+      <label>Customer / Lead
+        <select name="lead_id" required>
+          ${leads.map((x) => `
+            <option value="${x.id}" ${x.id === preselectedLeadId ? 'selected' : ''}>
+              ${esc(x.name || x.phone)} · ${esc(x.phone)}
+            </option>
+          `).join('')}
+        </select>
+      </label>
+      <label>Property
+        <select name="property_id" required>
+          ${props.map((x) => `
+            <option value="${x.id}">
+              ${esc(x.property_code)} · ${esc(x.title || '')} (${esc(x.projects?.name || '')})
+            </option>
+          `).join('')}
+        </select>
+      </label>
+      <label>Preferred date/time
+        <input name="scheduled_at" type="datetime-local">
+      </label>
+      <label>Notes
+        <textarea name="notes" rows="3"></textarea>
+      </label>
+      <div class="crm-modal-actions">
+        <button type="button" class="crm-small-btn" data-close>Cancel</button>
+        <button class="crm-primary">Create request</button>
+      </div>
+    </form>
+  `);
+  document.getElementById('visit-form').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api('/api/crm/site-visits', {
+        method: 'POST',
+        body: JSON.stringify(Object.fromEntries(new FormData(e.target)))
+      });
+      document.getElementById('crm-modal')?.remove();
+      await load();
+      render();
+      showToast('Site visit request created.');
+    } catch (x) {
+      showToast(x.message, true);
+    }
+  };
+}
+
+function offlineBookingModal(preselectedPropertyId = '') {
+  const availableProps = S.inventory.filter((x) => x.inventory_status === 'AVAILABLE' || x.id === preselectedPropertyId);
+  modal(`
+    <button class="crm-modal-close" data-close>×</button>
+    <div class="crm-eyebrow">OFFLINE CUSTOMER BOOKING</div>
+    <h2>Record Plot / Unit Booking</h2>
+    <p style="color: #6B7280; font-size: 0.88rem; margin-top: -8px; margin-bottom: 16px;">
+      Direct customer booking. Instantly updates the plot status to BOOKED and synchronizes with the public master plan.
+    </p>
+    <form id="offline-booking-form" class="crm-form">
+      <label>Customer Full Name *
+        <input name="customer_name" required placeholder="e.g. Ramesh Varma" />
+      </label>
+      <label>Mobile Number (WhatsApp) *
+        <input name="customer_phone" type="tel" required placeholder="e.g. 9876543210" maxlength="10" />
+      </label>
+      <label>Email Address (Optional)
+        <input name="customer_email" type="email" placeholder="customer@example.com" />
+      </label>
+      <label>Select Property / Plot *
+        <select name="property_id" required>
+          ${availableProps.map((p) => `
+            <option value="${p.id}" ${p.id === preselectedPropertyId ? 'selected' : ''}>
+              ${esc(p.property_code)} · ${esc(p.title || p.projects?.name || 'Unit')} (${p.inventory_status})
+            </option>
+          `).join('')}
+        </select>
+      </label>
+      <label>Booking Status *
+        <select name="status">
+          <option value="BOOKED" selected>BOOKED (Confirmed plot booking)</option>
+          <option value="HOLD">HOLD / RESERVED (Owner hold)</option>
+        </select>
+      </label>
+      <label>Advance Amount Received (₹)
+        <input name="amount" type="number" placeholder="e.g. 100000" />
+      </label>
+      <label>Booking Notes / Cheque Details
+        <textarea name="notes" rows="2" placeholder="Payment receipt no, branch walk-in, etc."></textarea>
+      </label>
+      <div class="crm-modal-actions">
+        <button type="button" class="crm-small-btn" data-close>Cancel</button>
+        <button class="crm-primary">Save &amp; Mark Booked</button>
+      </div>
+    </form>
+  `);
+
+  document.getElementById('offline-booking-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    try {
+      await api('/api/crm/offline-booking', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+      // Find property code
+      const p = S.inventory.find((x) => x.id === data.property_id);
+      if (p) {
+        syncPlotOverride(p.property_code, data.status === 'HOLD' ? 'reserved' : 'booked');
+        syncPlotOverride(p.id, data.status === 'HOLD' ? 'reserved' : 'booked');
+      }
+      showToast(`Plot successfully booked for ${data.customer_name}! Master plan synced.`);
+      document.getElementById('crm-modal')?.remove();
+      await load();
+      render();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  };
+}
+
+function showToast(msg, error = false) {
+  const x = document.createElement('div');
+  x.className = 'crm-toast' + (error ? ' error' : '');
+  x.textContent = msg;
+  document.body.appendChild(x);
+  setTimeout(() => x.remove(), 3500);
+}
+
+async function patchVisit(id, status, scheduled_at) {
+  try {
+    await api(`/api/crm/site-visits/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, scheduled_at })
+    });
+    showToast(
+      status === 'CONFIRMED'
+        ? 'Site visit confirmed & WhatsApp notification sent! (Plot status unaffected)'
+        : 'Site visit status updated.'
+    );
+    await load();
+    render();
+  } catch (x) {
+    showToast(x.message, true);
+  }
+}
+
+async function patchBooking(id, status) {
+  try {
+    await api(`/api/crm/bookings/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status })
+    });
+    showToast(status === 'CONFIRMED' ? 'Booking confirmed & WhatsApp sent to customer!' : 'Booking status updated.');
+    await load();
+    render();
+  } catch (x) {
+    showToast(x.message, true);
+  }
+}
+
+function bindLeadActions() {
+  document.querySelectorAll('[data-open-lead]').forEach((x) => {
+    x.onclick = () => {
+      const l = S.leads.find((y) => y.id === x.dataset.openLead);
+      if (l) leadModal(l);
+    };
+  });
+  document.querySelectorAll('[data-lead-status]').forEach((x) => {
+    x.onchange = async () => {
+      try {
+        await api(`/api/crm/leads/${x.dataset.leadStatus}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: x.value })
+        });
+        await load();
+        render();
+      } catch (e) {
+        showToast(e.message, true);
+      }
+    };
+  });
+}
+
+function bindEnquiryActions() {
+  bindLeadActions();
+  document.querySelectorAll('[data-convert-visit]').forEach((x) => {
+    x.onclick = () => visitModal(x.dataset.convertVisit);
+  });
+}
+
+function bind() {
+  document.querySelectorAll('[data-tab]').forEach((x) => {
+    x.onclick = () => {
+      S.tab = x.dataset.tab;
+      render();
+      if (S.tab === 'inbox' && S.active) messages(S.active).catch((e) => showToast(e.message, true));
+    };
+  });
+
+  document.querySelectorAll('[data-go]').forEach((x) => {
+    x.onclick = () => {
+      S.tab = x.dataset.go;
+      render();
+    };
+  });
+
+  document.getElementById('crm-logout')?.addEventListener('click', () => {
+    sessionStorage.removeItem('vr_crm_key');
+    key = '';
+    if (timer) clearInterval(timer);
+    login(document.getElementById('crm-root'));
+  });
+
+  document.getElementById('refresh')?.addEventListener('click', async () => {
+    try {
+      await load();
+      render();
+    } catch (e) {
+      showToast(e.message, true);
+    }
+  });
+
+  // Targeted In-Place Search (Fixes cursor jumping backwards bug)
+  const handleSearchInput = (e) => {
+    S.search = e.target.value;
+    const q = S.search.toLowerCase();
+    if (S.tab === 'leads') {
+      const tbody = document.getElementById('leads-table-body');
+      const countEl = document.querySelector('.crm-card-head h2');
+      const filtered = S.leads.filter((l) =>
+        (S.leadFilter === 'all' || (l.status || 'new') === S.leadFilter) &&
+        (!q || [l.name, l.phone, l.email, l.source, l.notes].some((v) => String(v || '').toLowerCase().includes(q)))
+      );
+      if (countEl) countEl.textContent = `${filtered.length} leads`;
+      if (tbody) {
+        tbody.innerHTML = renderLeadRows(filtered);
+        bindLeadActions();
+      }
+    } else if (S.tab === 'enquiries') {
+      const tbody = document.getElementById('enquiries-table-body');
+      const countEl = document.querySelector('.crm-card-head h2');
+      const filtered = S.leads.filter((l) =>
+        !q || [l.name, l.phone, l.email, l.source, l.notes].some((v) => String(v || '').toLowerCase().includes(q))
+      );
+      if (countEl) countEl.textContent = `${filtered.length} Enquiries`;
+      if (tbody) {
+        tbody.innerHTML = renderEnquiryRows(filtered);
+        bindEnquiryActions();
+      }
+    }
+  };
+
+  document.getElementById('lead-search')?.addEventListener('input', handleSearchInput);
+  document.getElementById('enquiry-search')?.addEventListener('input', handleSearchInput);
+
+  document.getElementById('lead-filter')?.addEventListener('change', (e) => {
+    S.leadFilter = e.target.value;
+    render();
+  });
+
+  document.getElementById('visit-filter')?.addEventListener('change', (e) => {
+    S.visitFilter = e.target.value;
+    render();
+  });
+
+  document.getElementById('inventory-filter')?.addEventListener('change', (e) => {
+    S.inventoryFilter = e.target.value;
+    render();
+  });
+
+  document.getElementById('inventory-refresh')?.addEventListener('click', async () => {
+    await load();
+    render();
+  });
+
+  document.getElementById('booking-filter')?.addEventListener('change', (e) => {
+    S.bookingFilter = e.target.value;
+    render();
+  });
+
+  document.getElementById('add-lead')?.addEventListener('click', () => leadModal());
+  document.getElementById('add-visit')?.addEventListener('click', () => visitModal());
+  document.getElementById('add-offline-booking')?.addEventListener('click', () => offlineBookingModal());
+
+  document.querySelectorAll('[data-offline-book]').forEach((x) => {
+    x.onclick = () => offlineBookingModal(x.dataset.offlineBook);
+  });
+
+  bindEnquiryActions();
+
+  document.querySelectorAll('[data-conversation]').forEach((x) => {
+    x.onclick = () => messages(x.dataset.conversation).catch((e) => showToast(e.message, true));
+  });
+
+  document.getElementById('ai-toggle')?.addEventListener('change', async (e) => {
+    try {
+      await api(`/api/crm/conversations/${S.active}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ ai_enabled: e.target.checked })
+      });
+      await load();
+      render();
+      await messages(S.active);
+    } catch (x) {
+      showToast(x.message, true);
+    }
+  });
+
+  document.getElementById('toggle-chat')?.addEventListener('click', async () => {
+    const c = S.conversations.find((x) => x.id === S.active);
+    try {
+      await api(`/api/crm/conversations/${S.active}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: c?.status === 'open' ? 'closed' : 'open' })
+      });
+      await load();
+      render();
+      await messages(S.active);
+    } catch (x) {
+      showToast(x.message, true);
+    }
+  });
+
+  document.getElementById('chat-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('chat-input');
+    const text = input.value.trim();
+    if (!text) return;
+    input.disabled = true;
+    try {
+      await api(`/api/crm/messages/${S.active}`, {
+        method: 'POST',
+        body: JSON.stringify({ body: text })
+      });
+      input.value = '';
+      await messages(S.active);
+    } catch (x) {
+      showToast(x.message, true);
+    } finally {
+      input.disabled = false;
+    }
+  });
+
+  document.querySelectorAll('[data-inventory]').forEach((x) => {
+    x.onchange = async () => {
+      if (!x.value) return;
+      const p = S.inventory.find((y) => y.id === x.dataset.inventory);
+      const reason = prompt(`Reason for ${p?.property_code || 'inventory'} → ${label(x.value)}:`) || 'CRM inventory update';
+      try {
+        await api(`/api/crm/inventory/${x.dataset.inventory}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: x.value, reason })
+        });
+        if (p) {
+          syncPlotOverride(p.property_code, x.value.toLowerCase());
+          syncPlotOverride(p.id, x.value.toLowerCase());
+        }
+        await load();
+        render();
+      } catch (e) {
+        x.value = '';
+        showToast(e.message, true);
+      }
+    };
+  });
+
+  document.querySelectorAll('[data-confirm-visit]').forEach((x) => {
+    x.onclick = async () => {
+      const v = S.visits.find((y) => y.id === x.dataset.confirmVisit);
+      let at = v?.scheduled_at;
+      if (!at) {
+        at = prompt('Enter scheduled date/time (example: 2026-09-15 11:00 AM):');
+        if (!at) return;
+      }
+      await patchVisit(v.id, 'CONFIRMED', at);
+    };
+  });
+
+  document.querySelectorAll('[data-cancel-visit]').forEach((x) => {
+    x.onclick = async () => {
+      if (confirm('Cancel this site visit request?')) await patchVisit(x.dataset.cancelVisit, 'CANCELLED');
+    };
+  });
+
+  document.querySelectorAll('[data-complete-visit]').forEach((x) => {
+    x.onclick = () => patchVisit(x.dataset.completeVisit, 'COMPLETED');
+  });
+
+  document.querySelectorAll('[data-reschedule-visit]').forEach((x) => {
+    x.onclick = async () => {
+      const at = prompt('New date/time for visit:');
+      if (at) await patchVisit(x.dataset.rescheduleVisit, 'RESCHEDULED', at);
+    };
+  });
+
+  document.querySelectorAll('[data-booking-confirm]').forEach((x) => {
+    x.onclick = () => patchBooking(x.dataset.bookingConfirm, 'CONFIRMED');
+  });
+
+  document.querySelectorAll('[data-booking-complete]').forEach((x) => {
+    x.onclick = () => patchBooking(x.dataset.bookingComplete, 'COMPLETED');
+  });
+
+  document.querySelectorAll('[data-booking-cancel]').forEach((x) => {
+    x.onclick = async () => {
+      if (confirm('Cancel this booking and release inventory?')) await patchBooking(x.dataset.bookingCancel, 'CANCELLED');
+    };
+  });
+
+  document.getElementById('reminder-settings-form')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const settings = {
+      remind48: document.getElementById('remind-48')?.checked,
+      remind24: document.getElementById('remind-24')?.checked,
+      remindDay: document.getElementById('remind-day')?.checked
+    };
+    localStorage.setItem('vr_crm_reminder_settings', JSON.stringify(settings));
+    showToast('Reminder preferences saved successfully!');
+  });
+}
+
+function render() {
+  const root = document.getElementById('crm-root');
+  if (root) {
+    root.innerHTML = shell(body());
+    bind();
+    if (S.tab === 'inbox' && S.active && !S.messages.length) {
+      messages(S.active).catch((e) => showToast(e.message, true));
+    }
+  }
+}
+
+function start() {
+  if (timer) clearInterval(timer);
+  timer = setInterval(async () => {
+    try {
+      await load();
+      render();
+    } catch (e) {
+      console.warn('[crm]', e.message);
+    }
+  }, 30000);
+}
+
+export function renderCrmPage() {
+  return {
+    html: '<div id="crm-root"></div>',
+    init: () => {
+      const root = document.getElementById('crm-root');
+      if (!key) return login(root);
+      load()
+        .then(() => {
+          render();
+          start();
+        })
+        .catch((e) => login(root, e.message));
+    }
+  };
+}

@@ -143,15 +143,21 @@ export const PLOT_COORDINATES = {
  * Overlays interactive data-driven plot zones & status engine over the photorealistic 3D Master Layout
  */
 export function renderMasterPlanSvg(plots = [], selectedPlotId = 'P18', prefix = 'mp') {
+  let overrides = {};
+  try {
+    overrides = JSON.parse(localStorage.getItem('vr_plot_status_overrides') || '{}');
+  } catch (e) {}
+
   // Render 18 Interactive Data-Driven Plot Overlays accurately following artwork geometry
   const plotsToRender = plots.slice(0, 18);
   const plotsSvgHtml = plotsToRender.map((p) => {
     const geo = PLOT_COORDINATES[p.id] || { x: 247, y: 124, width: 78, height: 88 };
     const { x, y, width, height } = geo;
     const isSelected = p.id.toUpperCase() === selectedPlotId.toUpperCase();
-    const isAvailable = p.status === 'available';
-    const isReserved = p.status === 'reserved' || p.status === 'booked';
-    const isSold = p.status === 'sold';
+    const effectiveStatus = (overrides[p.id] || overrides[p.num] || p.status || 'available').toLowerCase();
+    const isAvailable = effectiveStatus === 'available';
+    const isReserved = effectiveStatus === 'reserved' || effectiveStatus === 'booked' || effectiveStatus === 'hold';
+    const isSold = effectiveStatus === 'sold';
 
     // Phase 6 & 7: Subtle, semi-transparent overlays preserving background master-plan artwork
     let strokeColor = 'rgba(34, 197, 94, 0.55)';
@@ -285,7 +291,16 @@ export function renderMasterPlanSvg(plots = [], selectedPlotId = 'P18', prefix =
  * Generates the complete 3-column Open Plots UI
  */
 export function renderPlotMasterPlan(project) {
-  const plots = project.plots || [];
+  let overrides = {};
+  try {
+    overrides = JSON.parse(localStorage.getItem('vr_plot_status_overrides') || '{}');
+  } catch (e) {}
+
+  const rawPlots = project.plots || [];
+  const plots = rawPlots.map((p) => {
+    const eff = overrides[p.id] || overrides[p.num];
+    return eff ? { ...p, status: eff.toLowerCase() } : p;
+  });
   const defaultPlot = plots.find(p => p.isDefaultSelected) || plots.find(p => p.id === 'P18') || plots[0];
 
   return `
