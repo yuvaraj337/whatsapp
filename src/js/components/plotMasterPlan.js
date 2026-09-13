@@ -1360,35 +1360,48 @@ export function initPlotMasterPlan(project) {
 
   // CRM & Real-time Live Status Synchronization Helper
   window._updatePlotStatus = function (plotId, newStatus) {
-    const target = plots.find(p => p.id.toUpperCase() === plotId.toUpperCase());
+    const normStatus = String(newStatus || 'available').toLowerCase();
+    const target = plots.find(p => p.id.toUpperCase() === plotId.toUpperCase() || p.num?.toUpperCase() === plotId.toUpperCase());
     if (!target) return;
-    target.status = newStatus;
+    target.status = normStatus;
 
     document.querySelectorAll(`.plot-item[data-plot-id="${target.id}"]`).forEach(el => {
-      el.setAttribute('data-status', newStatus);
+      el.setAttribute('data-status', normStatus);
       const isSelected = el.classList.contains('plot-selected');
       const rect = el.querySelector('.plot-rect');
       const text = el.querySelector('.plot-num-text');
 
       if (!isSelected && rect) {
-        if (newStatus === 'available') {
+        if (normStatus === 'available') {
           rect.setAttribute('fill', 'rgba(34, 197, 94, 0.08)');
           rect.setAttribute('stroke', 'rgba(34, 197, 94, 0.55)');
           rect.setAttribute('stroke-width', '1.2');
           rect.removeAttribute('filter');
           if (text) text.setAttribute('fill', '#0F261C');
-        } else if (newStatus === 'reserved' || newStatus === 'booked') {
+        } else if (normStatus === 'hold' || normStatus === 'reserved') {
+          rect.setAttribute('fill', 'rgba(245, 158, 11, 0.12)');
+          rect.setAttribute('stroke', 'rgba(245, 158, 11, 0.55)');
+          rect.setAttribute('stroke-width', '1.4');
+          rect.removeAttribute('filter');
+          if (text) text.setAttribute('fill', '#B45309');
+        } else if (normStatus === 'booked') {
           rect.setAttribute('fill', 'rgba(239, 68, 68, 0.12)');
           rect.setAttribute('stroke', 'rgba(239, 68, 68, 0.5)');
           rect.setAttribute('stroke-width', '1.4');
           rect.removeAttribute('filter');
           if (text) text.setAttribute('fill', '#7F1D1D');
-        } else if (newStatus === 'sold') {
+        } else if (normStatus === 'sold') {
           rect.setAttribute('fill', 'rgba(220, 38, 38, 0.18)');
           rect.setAttribute('stroke', 'rgba(220, 38, 38, 0.6)');
           rect.setAttribute('stroke-width', '1.5');
           rect.removeAttribute('filter');
           if (text) text.setAttribute('fill', '#881337');
+        } else if (normStatus === 'blocked') {
+          rect.setAttribute('fill', 'rgba(100, 116, 139, 0.15)');
+          rect.setAttribute('stroke', 'rgba(100, 116, 139, 0.5)');
+          rect.setAttribute('stroke-width', '1.4');
+          rect.removeAttribute('filter');
+          if (text) text.setAttribute('fill', '#475569');
         }
       }
     });
@@ -1400,4 +1413,26 @@ export function initPlotMasterPlan(project) {
       attachCloseListeners();
     }
   };
+
+  // Listen to live CRM plot status changes
+  window.addEventListener('vr_plot_status_changed', (e) => {
+    if (e.detail?.propertyId && e.detail?.status) {
+      window._updatePlotStatus(e.detail.propertyId, e.detail.status);
+    }
+  });
+
+  // Fetch live properties from backend API on initial load
+  fetch('/api/properties?type=PLOT')
+    .then(r => r.json())
+    .then(payload => {
+      if (payload.data && Array.isArray(payload.data)) {
+        payload.data.forEach(p => {
+          if (p.property_code && p.inventory_status) {
+            window._updatePlotStatus(p.property_code, p.inventory_status);
+          }
+        });
+      }
+    })
+    .catch(() => {});
 }
+

@@ -2,7 +2,7 @@ import { supabaseGet } from '../lib/supabase.js';
 import { resolveProjectId } from './projectsService.js';
 
 const TYPES = new Set(['PLOT', 'APARTMENT', 'VILLA', 'FARM_LAND']);
-const STATUSES = new Set(['AVAILABLE', 'RESERVED', 'SOLD']);
+const STATUSES = new Set(['AVAILABLE', 'HOLD', 'RESERVED', 'BOOKED', 'SOLD', 'BLOCKED']);
 const PROPERTY_FIELDS = 'id,project_id,property_code,slug,property_type,inventory_status,title,description,area,area_unit,price,currency,metadata';
 
 export function validateType(value) {

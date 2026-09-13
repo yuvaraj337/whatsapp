@@ -211,13 +211,13 @@ export async function sendBookingConfirmationToCustomer({ phone, name, projectNa
 
   // Plain text confirmation
   const messageBody =
-    `*Real Estate Brothers group – BOOKING CONFIRMATION*\n\n` +
+    `*Real Estate Brothers group – SITE VISIT REQUEST RECEIVED*\n\n` +
     `Hello ${customerName},\n\n` +
-    `Your site visit / booking request has been received successfully!\n\n` +
+    `We have received your site visit request for *${project}*.\n\n` +
     `📍 *Project / Property:* ${project}\n` +
     `📅 *Preferred Date:* ${visitDate}\n` +
     `⏰ *Preferred Time:* ${visitTime}\n\n` +
-    `Our team will contact you shortly to confirm your visit.\n\n` +
+    `Our management team will review your preferred date/time and confirm your visit shortly.\n\n` +
     `Thank you,\n` +
     `*Real Estate Brothers group Team*`;
 
@@ -253,16 +253,17 @@ export async function sendBookingNotificationToOwner({
   }
 
   const messageBody =
-    `*Real Estate Brothers group – NEW WEBSITE BOOKING* 🔔\n\n` +
-    `A new site visit / booking has been requested on the website.\n\n` +
+    `*Real Estate Brothers group – NEW SITE VISIT / ENQUIRY REQUEST* 🔔\n\n` +
+    `A customer has submitted a site visit / enquiry request on the website.\n` +
+    `*(Notice: This is a REQUEST only. Plot inventory is NOT automatically booked or held.)*\n\n` +
     `👤 *Customer:* ${customerName || 'N/A'}\n` +
     `📱 *Phone:* ${customerPhone}\n` +
     `${customerEmail ? `✉️ *Email:* ${customerEmail}\n` : ''}` +
-    `🏡 *Project / Property:* ${projectName || 'General Site Visit'}\n` +
-    `📅 *Preferred Date:* ${date || 'N/A'}\n` +
-    `⏰ *Preferred Time:* ${time || 'N/A'}\n` +
-    `${notes ? `💬 *Details:* ${notes}\n` : ''}\n` +
-    `👉 *Action:* Please open the CRM *Bookings* section to *Confirm* this site visit and notify the customer.`;
+    `📍 *Project / Property:* ${projectName}\n` +
+    `📅 *Requested Date:* ${date || 'N/A'}\n` +
+    `⏰ *Requested Time:* ${time || 'N/A'}\n` +
+    `${notes ? `📝 *Notes:* ${notes}\n` : ''}\n` +
+    `Please log into your Sales CRM to confirm the site visit or manage inventory.`;
 
   return sendWhatsAppMessage(ownerPhone, messageBody);
 }

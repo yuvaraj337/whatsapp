@@ -1,7 +1,7 @@
 import { supabaseAdminGet, supabaseAdminPatch, supabaseAdminPost } from '../lib/supabaseAdmin.js';
 
 const LEAD_STATUSES = ['new', 'contacted', 'qualified', 'site_visit', 'negotiation', 'won', 'lost'];
-const INVENTORY_STATUSES = ['AVAILABLE', 'RESERVED', 'BOOKED', 'SOLD'];
+const INVENTORY_STATUSES = ['AVAILABLE', 'HOLD', 'RESERVED', 'BOOKED', 'SOLD', 'BLOCKED'];
 const VISIT_STATUSES = ['REQUESTED', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'RESCHEDULED'];
 const BOOKING_STATUSES = ['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED'];
 
@@ -57,19 +57,24 @@ async function propertyById(id) {
 }
 async function inventoryUpdate(id, next, reason = '') {
   next = clean(next).toUpperCase();
+  if (next === 'HOLD') next = 'RESERVED'; // normalize HOLD to RESERVED in schema if needed
   if (!INVENTORY_STATUSES.includes(next)) return bad(`Invalid inventory status. Allowed values: ${INVENTORY_STATUSES.join(', ')}`, 'INVALID_INVENTORY_STATUS');
   const property = await propertyById(id);
   if (!property) return { status: 404, error: { code: 'PROPERTY_NOT_FOUND', message: 'Property not found.' } };
   const current = property.inventory_status;
   if (current === next) return { status: 200, data: { property } };
+  
+  // Complete manual control for owner
   const allowed = {
-    AVAILABLE: ['RESERVED', 'BOOKED'],
-    RESERVED: ['AVAILABLE', 'BOOKED'],
-    BOOKED: ['AVAILABLE', 'RESERVED', 'SOLD'],
-    SOLD: ['AVAILABLE']
+    AVAILABLE: ['HOLD', 'RESERVED', 'BOOKED', 'BLOCKED', 'SOLD'],
+    HOLD: ['AVAILABLE', 'RESERVED', 'BOOKED', 'BLOCKED', 'SOLD'],
+    RESERVED: ['AVAILABLE', 'HOLD', 'BOOKED', 'BLOCKED', 'SOLD'],
+    BOOKED: ['AVAILABLE', 'HOLD', 'RESERVED', 'SOLD', 'BLOCKED'],
+    BLOCKED: ['AVAILABLE', 'HOLD', 'RESERVED', 'BOOKED'],
+    SOLD: ['AVAILABLE', 'BOOKED']
   };
   if (!allowed[current]?.includes(next)) return bad(`Invalid inventory transition: ${current} → ${next}.`, 'INVALID_INVENTORY_TRANSITION');
-  const rows = await supabaseAdminPatch('properties', { id: `eq.${id}`, inventory_status: `eq.${current}` }, { inventory_status: next, updated_at: new Date().toISOString() });
+  const rows = await supabaseAdminPatch('properties', { id: `eq.${id}` }, { inventory_status: next, updated_at: new Date().toISOString() });
   if (!rows[0]) return { status: 409, error: { code: 'INVENTORY_CHANGED', message: 'Inventory changed before this action completed. Refresh and try again.' } };
   await supabaseAdminPost('inventory_status_history', { property_id: id, from_status: current, to_status: next, reason: clean(reason) || 'CRM inventory update' }).catch((e) => console.error('[crm] history', e?.message || e));
   return { status: 200, data: { property: rows[0] } };
@@ -114,7 +119,63 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
     const params = { select: 'id,name,phone,email,source,status,notes,created_at,updated_at', order: 'created_at.desc', limit: '500' };
     if (status && status !== 'all') params.status = `eq.${status}`;
     let leads = await supabaseAdminGet('leads', params);
-    if (q) leads = leads.filter(x => [x.name, x.phone, x.email, x.source].some(v => String(v || '').toLowerCase().includes(q)));
+    if (q) leads = leads.filter(x => [x.name, x.phone, x.email, x.source, x.notes].some(v => String(v || '').toLowerCase().includes(q)));
+
+    // Enrich leads with project and property details (Fix for Issue 13)
+    if (leads.length > 0) {
+      const leadIds = leads.map(l => l.id);
+      const [allVisits, allInterests] = await Promise.all([
+        supabaseAdminGet('site_visits', {
+          select: 'lead_id,properties(property_code,title,projects(name))',
+          lead_id: `in.(${leadIds.join(',')})`,
+          order: 'created_at.desc'
+        }).catch(() => []),
+        supabaseAdminGet('lead_properties', {
+          select: 'lead_id,properties(property_code,title,projects(name))',
+          lead_id: `in.(${leadIds.join(',')})`,
+          order: 'created_at.desc'
+        }).catch(() => [])
+      ]);
+
+      const visitMap = new Map();
+      allVisits.forEach(v => {
+        if (!visitMap.has(v.lead_id) && v.properties) {
+          visitMap.set(v.lead_id, {
+            project: v.properties.projects?.name || v.properties.title || '',
+            property: v.properties.property_code || ''
+          });
+        }
+      });
+
+      const interestMap = new Map();
+      allInterests.forEach(i => {
+        if (!interestMap.has(i.lead_id) && i.properties) {
+          interestMap.set(i.lead_id, {
+            project: i.properties.projects?.name || i.properties.title || '',
+            property: i.properties.property_code || ''
+          });
+        }
+      });
+
+      leads = leads.map(l => {
+        const fromVisit = visitMap.get(l.id);
+        const fromInterest = interestMap.get(l.id);
+        let project = fromVisit?.project || fromInterest?.project || '';
+        let property = fromVisit?.property || fromInterest?.property || '';
+
+        if (!project && l.notes) {
+          const match = l.notes.match(/for\s+([^(\n|]+)/i) || l.notes.match(/booking:\s+([^(\n|]+)/i);
+          if (match) project = match[1].trim();
+        }
+
+        return {
+          ...l,
+          project: project || 'Real Estate Brothers group',
+          property: property || '—'
+        };
+      });
+    }
+
     return { status: 200, data: { leads } };
   }
 
@@ -217,10 +278,65 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
   }
 
   if (req.method === 'GET' && section === 'inventory') {
-    const status = clean(searchParams.get('status')).toUpperCase(); const type = clean(searchParams.get('type')).toUpperCase(); const project = clean(searchParams.get('project'));
-    const params = { select: 'id,project_id,property_code,title,property_type,inventory_status,area,area_unit,price,currency,metadata,created_at,updated_at,projects(name,slug)', order: 'property_code.asc', limit: '1000' };
-    if (status && status !== 'ALL') params.inventory_status = `eq.${status}`; if (type && type !== 'ALL') params.property_type = `eq.${type}`; if (project) params.project_id = `eq.${project}`;
-    return { status: 200, data: { properties: await supabaseAdminGet('properties', params) } };
+    if (id && pathParts[4] === 'history') {
+      const history = await supabaseAdminGet('inventory_status_history', {
+        select: 'id,property_id,from_status,to_status,reason,created_at',
+        property_id: `eq.${id}`,
+        order: 'created_at.desc',
+        limit: '50'
+      }).catch(() => []);
+      return { status: 200, data: { history } };
+    }
+
+    const status = clean(searchParams.get('status')).toUpperCase();
+    const type = clean(searchParams.get('type')).toUpperCase();
+    const project = clean(searchParams.get('project'));
+    const params = {
+      select: 'id,project_id,property_code,title,property_type,inventory_status,area,area_unit,price,currency,metadata,created_at,updated_at,projects(name,slug)',
+      order: 'property_code.asc',
+      limit: '1000'
+    };
+    if (status && status !== 'ALL') params.inventory_status = `eq.${status}`;
+    if (type && type !== 'ALL') params.property_type = `eq.${type}`;
+    if (project) params.project_id = `eq.${project}`;
+
+    const properties = await supabaseAdminGet('properties', params);
+
+    // Attach active customer/booking info for BOOKED/HOLD properties (Section 6 & 11)
+    const bookedProps = properties.filter(p => p.inventory_status === 'BOOKED' || p.inventory_status === 'HOLD' || p.inventory_status === 'RESERVED');
+    if (bookedProps.length) {
+      const propIds = bookedProps.map(p => p.id);
+      const bookings = await supabaseAdminGet('bookings', {
+        select: 'id,property_id,booking_reference,status,amount,booked_at,notes,leads(id,name,phone,email,source)',
+        property_id: `in.(${propIds.join(',')})`,
+        order: 'created_at.desc'
+      }).catch(() => []);
+
+      const bookingMap = new Map();
+      bookings.forEach(b => {
+        if (!bookingMap.has(b.property_id)) bookingMap.set(b.property_id, b);
+      });
+
+      properties.forEach(p => {
+        const b = bookingMap.get(p.id);
+        if (b) {
+          p.active_booking = {
+            id: b.id,
+            booking_reference: b.booking_reference,
+            status: b.status,
+            amount: b.amount,
+            booked_at: b.booked_at,
+            notes: b.notes,
+            customer_name: b.leads?.name || '',
+            customer_phone: b.leads?.phone || '',
+            customer_email: b.leads?.email || '',
+            source: b.leads?.source || 'CRM'
+          };
+        }
+      });
+    }
+
+    return { status: 200, data: { properties } };
   }
   if (req.method === 'PATCH' && section === 'inventory' && id) return inventoryUpdate(id, body.status, body.reason);
 
