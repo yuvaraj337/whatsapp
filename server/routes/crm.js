@@ -455,8 +455,18 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       order: 'requested_at.desc.nullslast',
       limit: '500'
     };
-    if (status && status !== 'ALL') params.status = `eq.${status}`;
-    const visits = await supabaseAdminGet('site_visits', params);
+    if (status && status !== 'ALL' && status !== 'BOOKED') params.status = `eq.${status}`;
+    let visits = await supabaseAdminGet('site_visits', params);
+    visits = visits.map(v => {
+      let currentStatus = v.status;
+      if (v.notes && v.notes.startsWith('[BOOKED]')) {
+        currentStatus = 'BOOKED';
+      }
+      return { ...v, status: currentStatus };
+    });
+    if (status === 'BOOKED') {
+      visits = visits.filter(v => v.status === 'BOOKED');
+    }
     return { status: 200, data: { visits } };
   }
   if (req.method === 'POST' && section === 'site-visits') {
@@ -579,14 +589,16 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       }).catch(() => null);
 
       const updated = await supabaseAdminPatch('site_visits', { id: `eq.${id}` }, {
-        status: 'BOOKED',
+        status: 'COMPLETED',
+        completed_at: new Date().toISOString(),
+        notes: `[BOOKED] ${visit.notes || ''}`.trim(),
         updated_at: new Date().toISOString()
       });
 
       return {
         status: 200,
         data: {
-          visit: updated[0] || visit,
+          visit: { ...(updated[0] || visit), status: 'BOOKED' },
           booking,
           property_id: visit.property_id,
           property_code: prop.property_code
