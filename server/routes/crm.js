@@ -316,8 +316,8 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
     if (!lead) return { status: 404, error: { code: 'ENQUIRY_NOT_FOUND', message: 'Enquiry not found.' } };
 
     const targetStatus = clean(body.status).toUpperCase();
-    if (!['BOOKED', 'CANCEL'].includes(targetStatus)) {
-      return bad('Enquiry status must be either BOOKED or CANCEL.', 'INVALID_ENQUIRY_STATUS');
+    if (!['BOOKED', 'CANCEL', 'NEW', 'RESTORE', 'REMOVE', 'ARCHIVE'].includes(targetStatus)) {
+      return bad('Enquiry status must be BOOKED, CANCEL, RESTORE, or REMOVE.', 'INVALID_ENQUIRY_STATUS');
     }
 
     if (targetStatus === 'CANCEL') {
@@ -335,6 +335,34 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         });
       }
       return { status: 200, data: { success: true, status: 'CANCEL' } };
+    }
+
+    if (targetStatus === 'RESTORE' || targetStatus === 'NEW') {
+      if (targetPropertyId && !targetPropertyId.startsWith('b_') && !targetPropertyId.startsWith('lp_')) {
+        await supabaseAdminPatch('lead_properties', {
+          lead_id: `eq.${realLeadId}`,
+          property_id: `eq.${targetPropertyId}`
+        }, {
+          interest_type: 'enquiry'
+        }).catch(() => null);
+      }
+      await supabaseAdminPatch('leads', { id: `eq.${realLeadId}` }, {
+        status: 'new',
+        updated_at: new Date().toISOString()
+      }).catch(() => null);
+      return { status: 200, data: { success: true, status: 'PENDING' } };
+    }
+
+    if (targetStatus === 'REMOVE' || targetStatus === 'ARCHIVE') {
+      if (targetPropertyId && !targetPropertyId.startsWith('b_') && !targetPropertyId.startsWith('lp_')) {
+        await supabaseAdminPatch('lead_properties', {
+          lead_id: `eq.${realLeadId}`,
+          property_id: `eq.${targetPropertyId}`
+        }, {
+          interest_type: 'archived'
+        }).catch(() => null);
+      }
+      return { status: 200, data: { success: true, status: 'ARCHIVED' } };
     }
 
     if (targetStatus === 'BOOKED') {
@@ -374,6 +402,11 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         };
       }
 
+      const finalPrice = Number(body.final_price || body.finalPrice || property.price || 0);
+      const advance = Number(body.amount ?? body.advance ?? 0);
+      const remaining = Math.max(0, finalPrice - advance);
+      const bookingNotes = `[Enquiry Booking] Listed Price: ₹${Number(property.price || 0).toLocaleString('en-IN')} | Final Agreed Price: ₹${Number(finalPrice).toLocaleString('en-IN')} | Advance: ₹${Number(advance).toLocaleString('en-IN')} | Remaining: ₹${Number(remaining).toLocaleString('en-IN')}${body.notes ? ` | Notes: ${clean(body.notes)}` : ''}`;
+
       const existingBooking = await supabaseAdminGet('bookings', {
         select: 'id,booking_reference,status',
         lead_id: `eq.${realLeadId}`,
@@ -390,11 +423,11 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
           property_id: propertyId,
           status: 'CONFIRMED',
           booking_reference: ref,
-          amount: body.amount || null,
+          amount: advance || null,
           currency: 'INR',
           booked_at: new Date().toISOString(),
           confirmed_at: new Date().toISOString(),
-          notes: `Enquiry booked by owner for ${lead.name || 'Customer'}. ${clean(body.notes) || ''}`
+          notes: bookingNotes
         });
         booking = newBookings[0];
       }
@@ -415,6 +448,21 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         status: 'won',
         updated_at: new Date().toISOString()
       });
+
+      return {
+        status: 200,
+        data: {
+          success: true,
+          status: 'BOOKED',
+          booking,
+          property_id: propertyId,
+          property_code: property.property_code,
+          final_price: finalPrice,
+          advance,
+          remaining_amount: remaining
+        }
+      };
+    }
 
       return {
         status: 200,
@@ -678,6 +726,11 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         };
       }
 
+      const finalPrice = Number(body.final_price || body.finalPrice || prop.price || 0);
+      const advance = Number(body.amount ?? body.advance ?? 0);
+      const remaining = Math.max(0, finalPrice - advance);
+      const bookingNotes = `[Site Visit Booking] Listed Price: ₹${Number(prop.price || 0).toLocaleString('en-IN')} | Final Agreed Price: ₹${Number(finalPrice).toLocaleString('en-IN')} | Advance: ₹${Number(advance).toLocaleString('en-IN')} | Remaining: ₹${Number(remaining).toLocaleString('en-IN')}${body.notes ? ` | Notes: ${clean(body.notes)}` : ''}`;
+
       const existing = await supabaseAdminGet('bookings', {
         select: 'id,booking_reference,status',
         lead_id: `eq.${visit.lead_id}`,
@@ -694,11 +747,11 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
           property_id: visit.property_id,
           status: 'CONFIRMED',
           booking_reference: ref,
-          amount: body.amount || null,
+          amount: advance || null,
           currency: 'INR',
           booked_at: new Date().toISOString(),
           confirmed_at: new Date().toISOString(),
-          notes: `Site visit converted to booking by owner. ${body.notes || ''}`
+          notes: bookingNotes
         });
         booking = newBookings[0];
       }
@@ -728,7 +781,10 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
           visit: { ...(updated[0] || visit), status: 'BOOKED' },
           booking,
           property_id: visit.property_id,
-          property_code: prop.property_code
+          property_code: prop.property_code,
+          final_price: finalPrice,
+          advance,
+          remaining_amount: remaining
         }
       };
     }
@@ -873,7 +929,31 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
 
     return { status: 200, data: { properties } };
   }
-  if (req.method === 'PATCH' && section === 'inventory' && id) return inventoryUpdate(id, body.status, body.reason);
+  if (req.method === 'PATCH' && section === 'inventory' && id) {
+    if (pathParts[4] === 'price') {
+      const prop = await propertyById(id);
+      if (!prop) return { status: 404, error: { code: 'PROPERTY_NOT_FOUND', message: 'Property not found.' } };
+      if (prop.inventory_status === 'BOOKED' || prop.inventory_status === 'SOLD') {
+        return bad(`Cannot edit price of a ${prop.inventory_status} property to preserve historical booking integrity.`, 'PROPERTY_NOT_AVAILABLE');
+      }
+      const newPrice = Number(body.price);
+      if (Number.isNaN(newPrice) || newPrice <= 0) {
+        return bad('Price must be a valid positive number.', 'INVALID_PRICE');
+      }
+      const updated = await supabaseAdminPatch('properties', { id: `eq.${id}` }, {
+        price: newPrice,
+        updated_at: new Date().toISOString()
+      });
+      await supabaseAdminPost('inventory_status_history', {
+        property_id: id,
+        from_status: prop.inventory_status,
+        to_status: prop.inventory_status,
+        reason: `Price updated by owner from ₹${prop.price || 0} to ₹${newPrice}`
+      }).catch(() => null);
+      return { status: 200, data: { property: updated[0] || prop, price: newPrice } };
+    }
+    return inventoryUpdate(id, body.status, body.reason);
+  }
 
   if (req.method === 'GET' && section === 'bookings') {
     const status = clean(searchParams.get('status')).toUpperCase();
@@ -929,6 +1009,11 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       lead = createdLeads[0];
     }
 
+    const finalPrice = Number(body.final_price || body.finalPrice || prop.price || 0);
+    const advance = Number(body.amount ?? body.advance ?? 0);
+    const remaining = Math.max(0, finalPrice - advance);
+    const bookingNotes = `[Offline Booking] Listed Price: ₹${Number(prop.price || 0).toLocaleString('en-IN')} | Final Agreed Price: ₹${Number(finalPrice).toLocaleString('en-IN')} | Advance: ₹${Number(advance).toLocaleString('en-IN')} | Remaining: ₹${Number(remaining).toLocaleString('en-IN')}${notes ? ` | Notes: ${notes}` : ''}`;
+
     await supabaseAdminPatch('properties', { id: `eq.${propertyId}` }, {
       inventory_status: targetStatus,
       updated_at: new Date().toISOString()
@@ -939,11 +1024,11 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       property_id: propertyId,
       status: targetStatus === 'BOOKED' ? 'CONFIRMED' : 'PENDING',
       booking_reference: `OFF-${Date.now().toString(36).toUpperCase()}`,
-      amount: amount || null,
+      amount: advance || null,
       currency: 'INR',
       booked_at: new Date().toISOString(),
       confirmed_at: targetStatus === 'BOOKED' ? new Date().toISOString() : null,
-      notes: `[Offline Booking] Customer: ${name}, Phone: ${phone}. ${notes}`
+      notes: bookingNotes
     }).catch(() => []);
 
     await supabaseAdminPost('inventory_status_history', {
@@ -960,7 +1045,10 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         booking: bookingRows[0] || null,
         lead,
         property_id: propertyId,
-        inventory_status: targetStatus
+        inventory_status: targetStatus,
+        final_price: finalPrice,
+        advance,
+        remaining_amount: remaining
       }
     };
   }
@@ -1036,16 +1124,25 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
     if (!BOOKING_STATUSES.includes(next)) return bad('Invalid booking status.', 'INVALID_BOOKING_STATUS');
     const allowed = { PENDING: ['CONFIRMED','CANCELLED'], CONFIRMED: ['COMPLETED','CANCELLED'], COMPLETED: [], CANCELLED: [] };
     if (booking.status !== next && !allowed[booking.status]?.includes(next)) return bad(`Invalid booking transition: ${booking.status} → ${next}.`, 'INVALID_BOOKING_TRANSITION');
-    if (next === 'CONFIRMED' && booking.property_id) {
+    if (next === 'COMPLETED' && booking.property_id) {
       const prop = await propertyById(booking.property_id);
-      // Skip inventory update if property is already BOOKED or SOLD (at or past target status)
-      if (prop && prop.inventory_status !== 'BOOKED' && prop.inventory_status !== 'SOLD') {
-        const result = await inventoryUpdate(booking.property_id, 'BOOKED', 'Booking confirmed');
+      if (prop && prop.inventory_status !== 'SOLD') {
+        const result = await inventoryUpdate(booking.property_id, 'SOLD', 'Booking completed');
         if (result.status !== 200 && result.status !== 409 && result.status !== 404) return result;
       }
     }
-    if (next === 'CANCELLED') { const property = await propertyById(booking.property_id); if (property?.inventory_status === 'BOOKED' || property?.inventory_status === 'RESERVED') { const result = await inventoryUpdate(booking.property_id, 'AVAILABLE', 'Booking cancelled'); if (result.status !== 200) return result; } }
-    const update = { status: next, updated_at: new Date().toISOString() }; if (next === 'CONFIRMED') { update.confirmed_at = new Date().toISOString(); update.booked_at = new Date().toISOString(); } if (next === 'CANCELLED') update.cancelled_at = new Date().toISOString(); if (body.notes !== undefined) update.notes = clean(body.notes) || null;
+    if (next === 'CANCELLED' && booking.property_id) {
+      const property = await propertyById(booking.property_id);
+      if (property?.inventory_status === 'BOOKED' || property?.inventory_status === 'RESERVED' || property?.inventory_status === 'HOLD') {
+        const result = await inventoryUpdate(booking.property_id, 'AVAILABLE', 'Booking cancelled / released');
+        if (result.status !== 200) return result;
+      }
+    }
+    const update = { status: next, updated_at: new Date().toISOString() };
+    if (next === 'CONFIRMED') { update.confirmed_at = new Date().toISOString(); update.booked_at = new Date().toISOString(); }
+    if (next === 'COMPLETED') { update.confirmed_at = update.confirmed_at || new Date().toISOString(); }
+    if (next === 'CANCELLED') { update.cancelled_at = new Date().toISOString(); }
+    if (body.notes !== undefined) update.notes = clean(body.notes) || null;
     const updated = await supabaseAdminPatch('bookings', { id: `eq.${id}`, status: `eq.${booking.status}` }, update); if (!updated[0]) return { status: 409, error: { code: 'BOOKING_CHANGED', message: 'Booking changed before this action completed. Refresh and try again.' } };
 
     // When confirmed by owner, dispatch WhatsApp Site Visit Confirmation to customer!
