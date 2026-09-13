@@ -150,7 +150,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
    * ==========================================
    */
   if (req.method === 'GET' && section === 'enquiries') {
-    const [leads, leadProperties, properties] = await Promise.all([
+    const [leads, leadProperties, properties, allBookings] = await Promise.all([
       supabaseAdminGet('leads', {
         select: 'id,name,phone,email,source,status,notes,created_at,updated_at',
         order: 'created_at.desc',
@@ -164,10 +164,19 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       supabaseAdminGet('properties', {
         select: 'id,property_code,title,inventory_status,projects(name,slug)',
         limit: '1000'
+      }).catch(() => []),
+      supabaseAdminGet('bookings', {
+        select: 'id,lead_id,property_id,status',
+        status: 'eq.CONFIRMED'
       }).catch(() => [])
     ]);
 
+    const bookedLeadProps = new Set(allBookings.map(b => `${b.lead_id}:${b.property_id}`));
     const propMap = new Map(properties.map(p => [p.id, p]));
+    const propByCode = new Map();
+    properties.forEach(p => {
+      if (p.property_code) propByCode.set(p.property_code.toUpperCase(), p);
+    });
 
     // Group lead_properties by lead_id
     const lpByLead = new Map();
@@ -184,85 +193,114 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
 
       const leadLps = (lpByLead.get(l.id) || []).filter(lp => lp.interest_type === 'enquiry');
 
-      let crmStatus = 'PENDING';
-      const st = (l.status || '').toLowerCase();
-      if (st === 'won' || st === 'converted' || st === 'booked') {
-        crmStatus = 'BOOKED';
-      } else if (st === 'lost' || st === 'cancelled' || st === 'cancel') {
-        crmStatus = 'CANCEL';
-      }
+      const blocks = (l.notes || '').split(/\n---\n/).filter(b => {
+        const isSiteVisit = /\[Website Site Visit\]|\[Offline Site Visit\]|Site visit scheduled/i.test(b);
+        const isEnquiry = /\[Website Enquiry\]|\[Contact Enquiry\]|enquiry|inquiry/i.test(b);
+        return !isSiteVisit && (isEnquiry || !b.includes('Site Visit'));
+      });
 
-      if (leadLps.length > 0) {
-        // Create a distinct enquiry row for each property enquiry
-        leadLps.forEach((lp, idx) => {
-          const prop = lp.properties || (lp.property_id ? propMap.get(lp.property_id) : null);
-          let project = prop?.projects?.name || '';
-          let property = prop?.property_code || '';
+      const leadEnqs = [];
 
-          if (lp.notes) {
-            const pMatch = lp.notes.match(/Project:\s*([^\n,|]+)/i) || lp.notes.match(/for\s+([^(\n|]+)/i);
-            if (pMatch && (!project || project === 'VR Green Meadows')) project = pMatch[1].trim();
-            const uMatch = lp.notes.match(/Unit:\s*([^\n,|]+)/i) || lp.notes.match(/Property:\s*([^\n,|]+)/i);
-            if (uMatch && !property) property = uMatch[1].trim();
+      if (blocks.length > 0) {
+        blocks.forEach((b, bIdx) => {
+          let project = '';
+          let property = '';
+          const pMatch = b.match(/Project:\s*([^\n,|]+)/i) || b.match(/for\s+([^(\n|]+)/i);
+          if (pMatch) project = pMatch[1].trim();
+          const uMatch = b.match(/Unit:\s*([^\n,|]+)/i) || b.match(/\b(V\d+|A-\d+|B-\d+|P\d+|F-[A-Z0-9-]+)\b/i);
+          if (uMatch) property = uMatch[1].trim();
+
+          let matchedProp = null;
+          if (property) matchedProp = propByCode.get(property.toUpperCase());
+          if (!matchedProp && project) {
+            const matchedLp = leadLps.find(lp => lp.properties?.projects?.name?.toLowerCase() === project.toLowerCase());
+            if (matchedLp?.properties) matchedProp = matchedLp.properties;
+          }
+          if (!matchedProp && project) {
+            matchedProp = properties.find(p => p.projects?.name?.toLowerCase() === project.toLowerCase());
+          }
+
+          if (matchedProp) {
+            project = matchedProp.projects?.name || project;
+            property = matchedProp.property_code || property;
           }
           if (!project) project = 'VR Green Meadows';
 
-          enquiries.push({
-            id: `${l.id}:${prop?.id || idx}`,
+          let status = 'PENDING';
+          if (matchedProp?.id && bookedLeadProps.has(`${l.id}:${matchedProp.id}`)) {
+            status = 'BOOKED';
+          } else if (l.status === 'cancelled' || l.status === 'lost') {
+            status = 'CANCEL';
+          } else if (l.status === 'won' || l.status === 'converted') {
+            status = 'BOOKED';
+          }
+
+          leadEnqs.push({
+            id: `${l.id}:${matchedProp?.id || 'b_' + bIdx}`,
             lead_id: l.id,
             name: l.name || 'Unknown',
             phone: l.phone || '—',
             email: l.email || '—',
             project,
             property: property || '—',
-            property_id: prop?.id || null,
-            notes: cleanEnquiryMessage(lp.notes || l.notes),
-            status: crmStatus,
-            created_at: lp.created_at || l.created_at
+            property_id: matchedProp?.id || null,
+            notes: cleanEnquiryMessage(b),
+            status,
+            created_at: l.created_at
           });
         });
-      } else if (l.notes && /enquiry|inquiry/i.test(l.notes)) {
-        // Parse distinct enquiry blocks from lead notes if no lead_properties row exists
-        const blocks = l.notes.split(/\n---\n/).filter(b => /enquiry|inquiry/i.test(b));
-        if (blocks.length > 0) {
-          blocks.forEach((block, bIdx) => {
-            let project = '';
-            let property = '';
-            const pMatch = block.match(/Project:\s*([^\n,|]+)/i) || block.match(/for\s+([^(\n|]+)/i);
-            if (pMatch) project = pMatch[1].trim();
-            const uMatch = block.match(/Unit:\s*([^\n,|]+)/i) || block.match(/Property:\s*([^\n,|]+)/i);
-            if (uMatch) property = uMatch[1].trim();
+      }
 
-            enquiries.push({
-              id: `${l.id}:block_${bIdx}`,
-              lead_id: l.id,
-              name: l.name || 'Unknown',
-              phone: l.phone || '—',
-              email: l.email || '—',
-              project: project || 'VR Green Meadows',
-              property: property || '—',
-              property_id: null,
-              notes: cleanEnquiryMessage(block),
-              status: crmStatus,
-              created_at: l.created_at
-            });
-          });
-        } else {
-          enquiries.push({
-            id: l.id,
+      // Include any lead_properties not covered by parsed blocks
+      leadLps.forEach((lp, idx) => {
+        const propId = lp.properties?.id || lp.property_id;
+        if (!leadEnqs.some(e => e.property_id === propId)) {
+          const prop = lp.properties || (propId ? propMap.get(propId) : null);
+          let project = prop?.projects?.name || 'VR Green Meadows';
+          let property = prop?.property_code || '—';
+
+          let status = 'PENDING';
+          if (propId && bookedLeadProps.has(`${l.id}:${propId}`)) {
+            status = 'BOOKED';
+          } else if (l.status === 'cancelled' || l.status === 'lost') {
+            status = 'CANCEL';
+          } else if (l.status === 'won' || l.status === 'converted') {
+            status = 'BOOKED';
+          }
+
+          leadEnqs.push({
+            id: `${l.id}:${propId || 'lp_' + idx}`,
             lead_id: l.id,
             name: l.name || 'Unknown',
             phone: l.phone || '—',
             email: l.email || '—',
-            project: 'VR Green Meadows',
-            property: '—',
-            property_id: null,
-            notes: cleanEnquiryMessage(l.notes),
-            status: crmStatus,
-            created_at: l.created_at
+            project,
+            property,
+            property_id: propId || null,
+            notes: cleanEnquiryMessage(lp.notes || l.notes),
+            status,
+            created_at: lp.created_at || l.created_at
           });
         }
+      });
+
+      if (leadEnqs.length === 0 && (l.status === 'new' || !l.status)) {
+        leadEnqs.push({
+          id: l.id,
+          lead_id: l.id,
+          name: l.name || 'Unknown',
+          phone: l.phone || '—',
+          email: l.email || '—',
+          project: 'VR Green Meadows',
+          property: '—',
+          property_id: null,
+          notes: cleanEnquiryMessage(l.notes),
+          status: 'PENDING',
+          created_at: l.created_at
+        });
       }
+
+      enquiries.push(...leadEnqs);
     }
 
     // Sort newest first
@@ -283,15 +321,24 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
     }
 
     if (targetStatus === 'CANCEL') {
-      await supabaseAdminPatch('leads', { id: `eq.${realLeadId}` }, {
-        status: 'cancelled',
-        updated_at: new Date().toISOString()
-      });
+      if (targetPropertyId && !targetPropertyId.startsWith('b_') && !targetPropertyId.startsWith('lp_')) {
+        await supabaseAdminPatch('lead_properties', {
+          lead_id: `eq.${realLeadId}`,
+          property_id: `eq.${targetPropertyId}`
+        }, {
+          interest_type: 'cancelled'
+        }).catch(() => null);
+      } else {
+        await supabaseAdminPatch('leads', { id: `eq.${realLeadId}` }, {
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
+        });
+      }
       return { status: 200, data: { success: true, status: 'CANCEL' } };
     }
 
     if (targetStatus === 'BOOKED') {
-      let propertyId = clean(body.property_id) || (targetPropertyId && !targetPropertyId.startsWith('block') ? targetPropertyId : null);
+      let propertyId = clean(body.property_id) || (targetPropertyId && !targetPropertyId.startsWith('b_') && !targetPropertyId.startsWith('lp_') ? targetPropertyId : null);
       if (!propertyId) {
         const lp = await supabaseAdminGet('lead_properties', {
           select: 'property_id',
@@ -329,7 +376,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
 
       const existingBooking = await supabaseAdminGet('bookings', {
         select: 'id,booking_reference,status',
-        lead_id: `eq.${id}`,
+        lead_id: `eq.${realLeadId}`,
         property_id: `eq.${propertyId}`,
         status: 'eq.CONFIRMED',
         limit: '1'
@@ -339,7 +386,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       if (!booking) {
         const ref = `BKG-${Date.now().toString(36).toUpperCase()}`;
         const newBookings = await supabaseAdminPost('bookings', {
-          lead_id: id,
+          lead_id: realLeadId,
           property_id: propertyId,
           status: 'CONFIRMED',
           booking_reference: ref,
@@ -364,7 +411,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         reason: `Enquiry booked: ${lead.name || 'Customer'} (${lead.phone || ''})`
       }).catch(() => null);
 
-      await supabaseAdminPatch('leads', { id: `eq.${id}` }, {
+      await supabaseAdminPatch('leads', { id: `eq.${realLeadId}` }, {
         status: 'won',
         updated_at: new Date().toISOString()
       });
