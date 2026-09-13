@@ -291,19 +291,21 @@ export async function createSiteVisitRecord(params = {}) {
   // 3. Record in lead_properties (upsert)
   if (resolvedPropId) {
     const existingLP = await supabaseAdminGet('lead_properties', {
-      select: 'lead_id',
+      select: 'lead_id,interest_type,notes',
       lead_id: `eq.${lead.id}`,
       property_id: `eq.${resolvedPropId}`,
       limit: '1'
     }).catch(() => []);
 
     if (existingLP[0]) {
+      // If customer previously enquired about this property, preserve 'enquiry' so it still appears in CRM Enquiries
+      const interestType = existingLP[0].interest_type === 'enquiry' ? 'enquiry' : 'site_visit';
       await supabaseAdminPatch('lead_properties', {
         lead_id: `eq.${lead.id}`,
         property_id: `eq.${resolvedPropId}`
       }, {
-        interest_type: 'site_visit',
-        notes: `Site visit scheduled for ${date} (${time})`
+        interest_type: interestType,
+        notes: existingLP[0].notes || `Site visit scheduled for ${date} (${time})`
       }).catch(() => null);
     } else {
       await supabaseAdminPost('lead_properties', {
@@ -426,7 +428,7 @@ export async function handleBookings(req, pathParts, body = {}) {
 
       if (propertyId && lead?.id) {
         const existingLP = await supabaseAdminGet('lead_properties', {
-          select: 'lead_id',
+          select: 'lead_id,notes',
           lead_id: `eq.${lead.id}`,
           property_id: `eq.${propertyId}`,
           limit: '1'
@@ -438,7 +440,7 @@ export async function handleBookings(req, pathParts, body = {}) {
             property_id: `eq.${propertyId}`
           }, {
             interest_type: 'enquiry',
-            notes: customerNotes
+            notes: existingLP[0].notes ? `${existingLP[0].notes}\n---\n${customerNotes}` : customerNotes
           }).catch((e) => console.warn('[enquiry] lead_properties patch warning:', e?.message || e));
         } else {
           await supabaseAdminPost('lead_properties', {
