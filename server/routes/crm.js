@@ -112,10 +112,12 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
 
     const siteVisitLeadIds = new Set(visits.map(v => v.lead_id));
     const enquiryLeads = leads.filter(l => {
-      if (siteVisitLeadIds.has(l.id)) return false;
       const src = (l.source || '').toLowerCase();
       if (src.includes('whatsapp') || src.includes('offline') || src.includes('walkin')) return false;
-      if (l.status === 'site_visit') return false;
+      const hasEnquiryInterest = leadProperties.some(lp => lp.lead_id === l.id && lp.interest_type === 'enquiry');
+      const notesSayEnquiry = l.notes && /enquiry|inquiry/i.test(l.notes);
+      if (hasEnquiryInterest || notesSayEnquiry) return true;
+      if (siteVisitLeadIds.has(l.id) && l.status === 'site_visit') return false;
       return true;
     });
 
@@ -174,25 +176,42 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         leadPropMap.set(lp.lead_id, lp);
       }
     });
+    // Prioritize explicit enquiry interest record
+    leadProperties.forEach(lp => {
+      if (lp.interest_type === 'enquiry') {
+        leadPropMap.set(lp.lead_id, lp);
+      }
+    });
 
     const enquiries = leads
       .filter(l => {
-        if (siteVisitLeadIds.has(l.id)) return false;
         const src = (l.source || '').toLowerCase();
         if (src.includes('whatsapp') || src.includes('offline') || src.includes('walkin')) return false;
-        if (l.status === 'site_visit') return false;
+
+        const hasEnquiryInterest = leadProperties.some(lp => lp.lead_id === l.id && lp.interest_type === 'enquiry');
+        const notesSayEnquiry = l.notes && /enquiry|inquiry/i.test(l.notes);
+
+        if (hasEnquiryInterest || notesSayEnquiry) return true;
+        if (siteVisitLeadIds.has(l.id) && l.status === 'site_visit') return false;
         return true;
       })
       .map(l => {
         const lp = leadPropMap.get(l.id);
         const prop = lp?.properties || (lp?.property_id ? propMap.get(lp.property_id) : null);
 
-        let project = prop?.projects?.name || prop?.title || '';
+        let project = prop?.projects?.name || '';
         let property = prop?.property_code || '';
 
-        if (!project && l.notes) {
-          const match = l.notes.match(/for\s+([^(\n|]+)/i) || l.notes.match(/project:\s*([^\n,|]+)/i);
-          if (match) project = match[1].trim();
+        if (l.notes) {
+          const pMatch = l.notes.match(/Project:\s*([^\n,|]+)/i) || l.notes.match(/for\s+([^(\n|]+)/i);
+          if (pMatch && (!project || project === 'VR Green Meadows')) {
+            const extracted = pMatch[1].trim();
+            if (extracted) project = extracted;
+          }
+          const uMatch = l.notes.match(/Unit:\s*([^\n,|]+)/i) || l.notes.match(/Property:\s*([^\n,|]+)/i);
+          if (uMatch && !property) {
+            property = uMatch[1].trim();
+          }
         }
         if (!project) project = 'VR Green Meadows';
 
@@ -462,7 +481,37 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       if (v.notes && v.notes.startsWith('[BOOKED]')) {
         currentStatus = 'BOOKED';
       }
-      return { ...v, status: currentStatus };
+
+      let projectName = v.properties?.projects?.name || '';
+      let propertyCode = v.properties?.property_code || '';
+      let propertyTitle = v.properties?.title || '';
+
+      if (v.notes) {
+        const pMatch = v.notes.match(/Project:\s*([^\n,|]+)/i);
+        if (pMatch && (!projectName || projectName === 'VR Green Meadows')) {
+          projectName = pMatch[1].trim();
+        }
+        const uMatch = v.notes.match(/Unit:\s*([^\n,|]+)/i) || v.notes.match(/\((V\d+|A-\d+|B-\d+|P\d+|F-[A-Z0-9-]+)\)/i);
+        if (uMatch && (!propertyCode || propertyCode === 'P01')) {
+          propertyCode = uMatch[1].trim();
+        }
+      }
+
+      const updatedProps = v.properties ? {
+        ...v.properties,
+        projects: {
+          ...(v.properties.projects || {}),
+          name: projectName || v.properties.projects?.name || 'VR Green Meadows'
+        },
+        property_code: propertyCode || v.properties.property_code,
+        title: propertyTitle || v.properties.title
+      } : {
+        property_code: propertyCode || '—',
+        title: propertyTitle || '—',
+        projects: { name: projectName || 'VR Green Meadows' }
+      };
+
+      return { ...v, status: currentStatus, properties: updatedProps };
     });
     if (status === 'BOOKED') {
       visits = visits.filter(v => v.status === 'BOOKED');

@@ -3,6 +3,7 @@
 // Exact visual and functional reproduction of reference designs
 // ============================================================================
 
+import { api } from '../api/client.js';
 import { renderHeader, initStickyNav } from '../components/header.js';
 import { renderFooter, initScrollTop } from '../components/footer.js';
 import { renderMasterPlanSvgCode, initVillaMasterPlan } from '../components/villaMasterPlan.js';
@@ -1302,7 +1303,7 @@ function attachVillasEvents(screen) {
     }
   };
 
-  window._submitVillaEnquiry = function(e) {
+  window._submitVillaEnquiry = async function(e) {
     e.preventDefault();
     const nameEl = document.getElementById('enquiry-name');
     const phoneEl = document.getElementById('enquiry-phone');
@@ -1310,18 +1311,48 @@ function attachVillasEvents(screen) {
     const dateEl = document.getElementById('enquiry-date');
     const msgEl = document.getElementById('enquiry-message');
 
-    enquiryFormData = {
-      name: nameEl ? nameEl.value : '',
-      phone: phoneEl ? phoneEl.value : '',
-      email: emailEl ? emailEl.value : '',
-      date: dateEl ? dateEl.value : '',
-      message: msgEl ? msgEl.value : ''
-    };
+    const name = nameEl ? nameEl.value.trim() : '';
+    const phone = phoneEl ? phoneEl.value.trim() : '';
+    const email = emailEl ? emailEl.value.trim() : '';
+    const date = dateEl ? dateEl.value.trim() : '';
+    const message = msgEl ? msgEl.value.trim() : '';
+
+    enquiryFormData = { name, phone, email, date, message };
+
+    const submitBtn = e.target ? e.target.querySelector('button[type="submit"]') : null;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting Enquiry...';
+    }
+
+    try {
+      await api.createBooking({
+        type: 'enquiry',
+        name,
+        phone,
+        email,
+        date: date || 'Immediate Enquiry',
+        projectName: currentVillaUnit?.projectName || 'VR Green Villas',
+        propertyCode: currentVillaUnit?.num || 'V08',
+        propertyTitle: currentVillaUnit?.title || `Villa ${currentVillaUnit?.num || 'V08'}`,
+        propertyType: 'VILLA',
+        message: message || `Enquiry for ${currentVillaUnit?.title || 'Villa'}`,
+        notes: message || `Enquiry for ${currentVillaUnit?.title || 'Villa'}`,
+        source: 'Website'
+      });
+    } catch (err) {
+      console.warn('[villas-enquiry] API sync note:', err?.message || err);
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Enquiry';
+      }
+    }
 
     window._villaNav(`/villas/vr-green-villas/villa/${currentVillaUnit.id}/enquiry-success`);
   };
 
-  window._submitVillaSiteVisit = function(e) {
+  window._submitVillaSiteVisit = async function(e) {
     e.preventDefault();
     const nameEl = document.getElementById('visit-name');
     const phoneEl = document.getElementById('visit-phone');
@@ -1330,14 +1361,45 @@ function attachVillasEvents(screen) {
     const slotEl = document.getElementById('visit-slot');
     const msgEl = document.getElementById('visit-message');
 
-    siteVisitFormData = {
-      name: nameEl ? nameEl.value : '',
-      phone: phoneEl ? phoneEl.value : '',
-      email: emailEl ? emailEl.value : '',
-      date: dateEl ? dateEl.value : '',
-      timeSlot: slotEl ? slotEl.value : '',
-      message: msgEl ? msgEl.value : ''
-    };
+    const name = nameEl ? nameEl.value.trim() : '';
+    const phone = phoneEl ? phoneEl.value.trim() : '';
+    const email = emailEl ? emailEl.value.trim() : '';
+    const date = dateEl ? dateEl.value.trim() : '';
+    const timeSlot = slotEl ? slotEl.value.trim() : '10:00 AM - 12:00 PM';
+    const message = msgEl ? msgEl.value.trim() : '';
+
+    siteVisitFormData = { name, phone, email, date, timeSlot, message };
+
+    const submitBtn = e.target ? e.target.querySelector('button[type="submit"]') : null;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting Request...';
+    }
+
+    try {
+      await api.createBooking({
+        type: 'site_visit',
+        name,
+        phone,
+        email,
+        date,
+        time: timeSlot,
+        projectName: currentVillaUnit?.projectName || 'VR Green Villas',
+        propertyCode: currentVillaUnit?.num || 'V08',
+        propertyTitle: currentVillaUnit?.title || `Villa ${currentVillaUnit?.num || 'V08'}`,
+        propertyType: 'VILLA',
+        message,
+        notes: message,
+        source: 'Website'
+      });
+    } catch (err) {
+      console.warn('[villas-site-visit] API sync note:', err?.message || err);
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Request';
+      }
+    }
 
     window._villaNav(`/villas/vr-green-villas/villa/${currentVillaUnit.id}/site-visit-success`);
   };

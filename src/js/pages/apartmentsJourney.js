@@ -1071,8 +1071,10 @@ function attachEvents(screen) {
     if (form) {
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const name = document.getElementById('enq-input-name').value.trim();
-        const mobile = document.getElementById('enq-input-mobile').value.trim();
+        const name = document.getElementById('enq-input-name')?.value?.trim() || '';
+        const mobile = document.getElementById('enq-input-mobile')?.value?.trim() || '';
+        const email = document.getElementById('enq-input-email')?.value?.trim() || '';
+        const msg = document.getElementById('enq-input-msg')?.value?.trim() || '';
         if (!name || name.length < 2) { alert('Please enter your full name.'); return; }
         if (!/^[6-9]\d{9}$/.test(mobile)) { alert('Please enter a valid 10-digit mobile number.'); return; }
 
@@ -1082,17 +1084,23 @@ function attachEvents(screen) {
           submitBtn.textContent = 'Submitting...';
         }
 
+        const aptCode = selectedUnit?.id || 'A-704';
+        const aptTitle = selectedUnit?.unitName || `Unit ${aptCode}`;
+
         try {
           await api.createBooking({
             type: 'enquiry',
             name,
             phone: mobile,
-            projectName: selectedUnit?.projectName || 'VR Elite Towers',
-            propertyCode: selectedUnit?.propertyCode || selectedUnit?.unitName || '',
-            unitName: selectedUnit?.unitName || 'Apartment Unit',
+            email,
+            projectName: 'VR Heights',
+            propertyCode: aptCode,
+            unitName: aptTitle,
+            propertyTitle: aptTitle,
             propertyId: selectedUnit?.id || null,
             propertyType: 'APARTMENT',
-            notes: 'Enquiry from Apartments Journey',
+            message: msg || `Enquiry for ${aptTitle} at ${selectedUnit?.projectName || 'VR Elite Towers'}`,
+            notes: msg || `Enquiry for ${aptTitle} at ${selectedUnit?.projectName || 'VR Elite Towers'}`,
             source: 'Website'
           });
           enquiryName = name;
@@ -1115,9 +1123,12 @@ function attachEvents(screen) {
     if (form) {
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const name = document.getElementById('sv-input-name').value.trim();
-        const mobile = document.getElementById('sv-input-mobile').value.trim();
-        const date = document.getElementById('sv-input-date').value;
+        const name = document.getElementById('sv-input-name')?.value?.trim() || '';
+        const mobile = document.getElementById('sv-input-mobile')?.value?.trim() || '';
+        const email = document.getElementById('sv-input-email')?.value?.trim() || '';
+        const date = document.getElementById('sv-input-date')?.value || '';
+        const time = document.getElementById('sv-input-time')?.value || '11:00 AM';
+        const msg = document.getElementById('sv-input-msg')?.value?.trim() || '';
         if (!name || name.length < 2) { alert('Please enter your full name.'); return; }
         if (!/^[6-9]\d{9}$/.test(mobile)) { alert('Please enter a valid 10-digit mobile number.'); return; }
         if (!date) { alert('Please select a preferred date.'); return; }
@@ -1128,18 +1139,25 @@ function attachEvents(screen) {
           submitBtn.textContent = 'Submitting...';
         }
 
+        const aptCode = selectedUnit?.id || 'A-704';
+        const aptTitle = selectedUnit?.unitName || `Unit ${aptCode}`;
+
         try {
           await api.createBooking({
             type: 'site_visit',
             name,
             phone: mobile,
+            email,
             date,
-            time: '11:00 AM',
-            projectName: selectedUnit?.projectName || 'VR Elite Towers',
-            propertyCode: selectedUnit?.propertyCode || selectedUnit?.unitName || '',
-            unitName: selectedUnit?.unitName || 'Apartment Unit',
+            time,
+            projectName: 'VR Heights',
+            propertyCode: aptCode,
+            unitName: aptTitle,
+            propertyTitle: aptTitle,
             propertyId: selectedUnit?.id || null,
             propertyType: 'APARTMENT',
+            message: msg,
+            notes: msg,
             source: 'Website'
           });
           siteVisitName = name;

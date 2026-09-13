@@ -37,55 +37,125 @@ export function parseSchedule(dateStr, timeStr) {
  * Fallbacks to the first available property to satisfy DB foreign keys.
  */
 export async function resolvePropertyId(hints = {}) {
-  const { propertyId, propertyCode, propertyTitle, projectName } = hints;
+  let { propertyId, propertyCode, propertyTitle, projectName, propertyType } = hints;
 
   if (propertyId) {
     const byId = await supabaseAdminGet('properties', {
-      select: 'id',
+      select: 'id,project_id',
       id: `eq.${propertyId}`,
       limit: '1'
     }).catch(() => []);
     if (byId[0]?.id) return byId[0].id;
   }
 
+  // 1. Resolve project by name or known aliases
+  let matchedProjectId = null;
+  const pStr = String(projectName || '').toLowerCase();
+  const tStr = String(propertyTitle || '').toLowerCase();
+  const cStr = String(propertyCode || '').toLowerCase();
+
+  let projectSlug = null;
+  if (pStr.includes('villa') || tStr.includes('villa') || (cStr.startsWith('v') && !cStr.startsWith('val'))) {
+    projectSlug = 'vr-green-villas';
+  } else if (pStr.includes('height') || pStr.includes('tower') || pStr.includes('apartment') || pStr.includes('elite') || pStr.includes('urban') || cStr.startsWith('a-') || cStr.startsWith('b-')) {
+    projectSlug = 'vr-heights';
+  } else if (pStr.includes('farm') || pStr.includes('agro') || pStr.includes('valley') || pStr.includes('nest') || pStr.includes('siri') || cStr.startsWith('f-') || tStr.includes('farm')) {
+    projectSlug = 'vr-agro-lands';
+  } else if (pStr.includes('meadow') || pStr.includes('plot') || (cStr.startsWith('p') && !cStr.startsWith('pr'))) {
+    projectSlug = 'vr-green-meadows';
+  }
+
+  if (projectSlug) {
+    const projRows = await supabaseAdminGet('projects', {
+      select: 'id',
+      slug: `eq.${projectSlug}`,
+      limit: '1'
+    }).catch(() => []);
+    if (projRows[0]?.id) matchedProjectId = projRows[0].id;
+  }
+
+  if (!matchedProjectId && projectName) {
+    const cleanProj = projectName.replace(/\(.*\)/, '').trim();
+    const projRows = await supabaseAdminGet('projects', {
+      select: 'id',
+      name: `ilike.%${cleanProj}%`,
+      limit: '1'
+    }).catch(() => []);
+    if (projRows[0]?.id) matchedProjectId = projRows[0].id;
+  }
+
+  // 2. Clean & normalize property code
+  let cleanCode = '';
   if (propertyCode) {
-    const byCode = await supabaseAdminGet('properties', {
-      select: 'id',
-      property_code: `eq.${propertyCode.toUpperCase()}`,
-      limit: '1'
-    }).catch(() => []);
-    if (byCode[0]?.id) return byCode[0].id;
-  }
+    const raw = String(propertyCode).trim();
+    const vMatch = raw.match(/\bV-?0*([1-9]\d?)\b/i);
+    const aMatch = raw.match(/\b([AB])-?0*(\d{3})\b/i);
+    const pMatch = raw.match(/\bP-?0*([1-9]\d?)\b/i);
+    const fMatch = raw.match(/\bF-([A-Z0-9-]+)\b/i);
 
-  if (propertyTitle) {
-    const byTitle = await supabaseAdminGet('properties', {
-      select: 'id',
-      title: `ilike.%${propertyTitle}%`,
-      limit: '1'
-    }).catch(() => []);
-    if (byTitle[0]?.id) return byTitle[0].id;
-  }
-
-  // Look for any property belonging to the project
-  if (projectName) {
-    const cleanProject = projectName.replace(/\(.*\)/, '').trim();
-    const projects = await supabaseAdminGet('projects', {
-      select: 'id',
-      name: `ilike.%${cleanProject}%`,
-      limit: '1'
-    }).catch(() => []);
-
-    if (projects[0]?.id) {
-      const byProject = await supabaseAdminGet('properties', {
-        select: 'id',
-        project_id: `eq.${projects[0].id}`,
-        limit: '1'
-      }).catch(() => []);
-      if (byProject[0]?.id) return byProject[0].id;
+    if (vMatch) {
+      cleanCode = `V${vMatch[1].padStart(2, '0')}`;
+    } else if (aMatch) {
+      cleanCode = `${aMatch[1].toUpperCase()}-${aMatch[2]}`;
+    } else if (pMatch) {
+      cleanCode = `P${pMatch[1].padStart(2, '0')}`;
+    } else if (fMatch) {
+      cleanCode = raw.toUpperCase();
+    } else if (/green[-_\s]?valley/i.test(raw)) {
+      cleanCode = 'F-GREEN-VALLEY';
+    } else if (/nature/i.test(raw)) {
+      cleanCode = 'F-NATURES-NEST';
+    } else if (/siri/i.test(raw)) {
+      cleanCode = 'F-SIRI-AGRO';
+    } else {
+      cleanCode = raw.toUpperCase();
     }
   }
 
-  // Safe fallback to first property in database
+  // 3. Try to match by property code AND matchedProjectId
+  if (cleanCode) {
+    const filter = {
+      select: 'id',
+      property_code: `eq.${cleanCode}`,
+      limit: '1'
+    };
+    if (matchedProjectId) filter.project_id = `eq.${matchedProjectId}`;
+    const byCode = await supabaseAdminGet('properties', filter).catch(() => []);
+    if (byCode[0]?.id) return byCode[0].id;
+
+    if (matchedProjectId) {
+      const byCodeAny = await supabaseAdminGet('properties', {
+        select: 'id',
+        property_code: `eq.${cleanCode}`,
+        limit: '1'
+      }).catch(() => []);
+      if (byCodeAny[0]?.id) return byCodeAny[0].id;
+    }
+  }
+
+  // 4. Try matching by property title
+  if (propertyTitle) {
+    const filter = {
+      select: 'id',
+      title: `ilike.%${propertyTitle}%`,
+      limit: '1'
+    };
+    if (matchedProjectId) filter.project_id = `eq.${matchedProjectId}`;
+    const byTitle = await supabaseAdminGet('properties', filter).catch(() => []);
+    if (byTitle[0]?.id) return byTitle[0].id;
+  }
+
+  // 5. If project is known, return first property of that project
+  if (matchedProjectId) {
+    const byProj = await supabaseAdminGet('properties', {
+      select: 'id',
+      project_id: `eq.${matchedProjectId}`,
+      limit: '1'
+    }).catch(() => []);
+    if (byProj[0]?.id) return byProj[0].id;
+  }
+
+  // 6. Safe fallback to first property in database
   const first = await supabaseAdminGet('properties', { select: 'id', limit: '1' }).catch(() => []);
   return first[0]?.id || null;
 }
@@ -146,6 +216,7 @@ export async function createSiteVisitRecord(params = {}) {
   const email = cleanStr(params.email || params.customer_email || '');
   const projectName = cleanStr(params.projectName || params.project_name || 'VR Green Meadows');
   const propertyCode = cleanStr(params.propertyCode || params.property_code || '');
+  const propertyTitle = cleanStr(params.propertyTitle || params.property_title || '');
   const propertyId = params.propertyId || params.property_id || null;
   const date = cleanStr(params.date || params.scheduled_at || '');
   const time = cleanStr(params.time || 'Anytime');
@@ -173,7 +244,7 @@ export async function createSiteVisitRecord(params = {}) {
     propertyId,
     propertyCode,
     projectName,
-    propertyTitle: propertyCode ? `Plot ${propertyCode}` : projectName
+    propertyTitle: propertyTitle || propertyCode || projectName
   });
 
   // 1. Find or create Lead
@@ -349,7 +420,7 @@ export async function handleBookings(req, pathParts, body = {}) {
   if (isEnquiry) {
     console.log(`[enquiry] Processing customer enquiry for "${name}" (${normalizedPhone}) - Project: ${projectName}`);
     
-    const customerNotes = message ? message.trim() : '';
+    const customerNotes = `[${body.source || 'Website'} Enquiry] Project: ${projectName}${propertyCode ? `, Unit: ${propertyCode}` : ''}${message ? ` | Message: ${message}` : ''}`;
     
     let lead = null;
     try {
@@ -358,7 +429,7 @@ export async function handleBookings(req, pathParts, body = {}) {
         normalizedPhone,
         email,
         customerNotes,
-        'Website',
+        body.source || 'Website',
         'new'
       );
 
@@ -367,7 +438,7 @@ export async function handleBookings(req, pathParts, body = {}) {
         propertyId: body.propertyId,
         propertyCode,
         projectName,
-        propertyTitle: projectName
+        propertyTitle: body.propertyTitle || propertyCode || projectName
       });
 
       if (propertyId && lead?.id) {
@@ -434,6 +505,7 @@ export async function handleBookings(req, pathParts, body = {}) {
       email,
       projectName,
       propertyCode,
+      propertyTitle: body.propertyTitle,
       propertyId: body.propertyId,
       date,
       time,

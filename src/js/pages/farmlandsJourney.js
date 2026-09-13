@@ -3,6 +3,7 @@
 // Exact visual and functional reproduction of farmland-flow reference images
 // ============================================================================
 
+import { api } from '../api/client.js';
 import { renderHeader, initStickyNav } from '../components/header.js';
 import { renderFooter, initScrollTop } from '../components/footer.js';
 
@@ -988,30 +989,65 @@ function attachFarmlandEvents(screen, farm) {
     window._setFarmlandPhoto(farm.thumbs[nextIdx - 1], nextIdx);
   };
 
-  window._submitFarmlandEnquiry = function(e, farmId) {
+  window._submitFarmlandEnquiry = async function(e, farmId) {
     e.preventDefault();
-    const name = document.getElementById('farm-enq-name')?.value || '';
-    const phone = document.getElementById('farm-enq-phone')?.value || '';
-    const email = document.getElementById('farm-enq-email')?.value || '';
-    const interest = document.getElementById('farm-enq-interest')?.value || '';
-    const msg = document.getElementById('farm-enq-msg')?.value || '';
+    const farm = farmlandsData.find((f) => f.id === farmId) || farmlandsData[0];
+    const name = document.getElementById('farm-enq-name')?.value?.trim() || '';
+    const phone = document.getElementById('farm-enq-phone')?.value?.trim() || '';
+    const email = document.getElementById('farm-enq-email')?.value?.trim() || '';
+    const interest = document.getElementById('farm-enq-interest')?.value?.trim() || '';
+    const msg = document.getElementById('farm-enq-msg')?.value?.trim() || '';
 
     enquiryFormState = { name, phone, email, interest, message: msg };
+
+    let farmCode = 'F-GREEN-VALLEY';
+    if (farmId === 'natures-nest') farmCode = 'F-NATURES-NEST';
+    else if (farmId === 'siri-agro-farms') farmCode = 'F-SIRI-AGRO';
+
+    const submitBtn = e.target ? e.target.querySelector('button[type="submit"]') : null;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting Enquiry...';
+    }
+
+    try {
+      await api.createBooking({
+        type: 'enquiry',
+        name,
+        phone,
+        email,
+        projectName: 'VR Agro Lands',
+        propertyCode: farmCode,
+        propertyTitle: farm?.name || 'Green Valley Farms',
+        propertyType: 'FARM_LAND',
+        message: msg || interest || `Enquiry for ${farm?.name || 'Farmland'}`,
+        notes: msg || interest || `Enquiry for ${farm?.name || 'Farmland'}`,
+        source: 'Website'
+      });
+    } catch (err) {
+      console.warn('[farmland-enquiry] API sync note:', err?.message || err);
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Enquiry';
+      }
+    }
+
     window._farmlandNav(`/farmlands/${farmId}/enquiry-success`);
   };
 
-  window._submitFarmlandVisit = function(e, farmId) {
+  window._submitFarmlandVisit = async function(e, farmId) {
     e.preventDefault();
-    const name = document.getElementById('farm-visit-name')?.value || '';
-    const phone = document.getElementById('farm-visit-phone')?.value || '';
-    const rawDate = document.getElementById('farm-visit-date')?.value || '';
+    const farm = farmlandsData.find((f) => f.id === farmId) || farmlandsData[0];
+    const name = document.getElementById('farm-visit-name')?.value?.trim() || '';
+    const phone = document.getElementById('farm-visit-phone')?.value?.trim() || '';
+    const rawDate = document.getElementById('farm-visit-date')?.value?.trim() || '';
     let displayDate = rawDate;
     if (rawDate && rawDate.includes('-') && rawDate.split('-')[0].length === 4) {
-      // YYYY-MM-DD to DD-MM-YYYY
       displayDate = rawDate.split('-').reverse().join('-');
     }
     const slot = document.getElementById('farm-visit-slot')?.value || '10:00 AM - 12:00 PM';
-    const msg = document.getElementById('farm-visit-msg')?.value || '';
+    const msg = document.getElementById('farm-visit-msg')?.value?.trim() || '';
 
     siteVisitFormState = {
       name,
@@ -1020,6 +1056,41 @@ function attachFarmlandEvents(screen, farm) {
       time: slot,
       message: msg
     };
+
+    let farmCode = 'F-GREEN-VALLEY';
+    if (farmId === 'natures-nest') farmCode = 'F-NATURES-NEST';
+    else if (farmId === 'siri-agro-farms') farmCode = 'F-SIRI-AGRO';
+
+    const submitBtn = e.target ? e.target.querySelector('button[type="submit"]') : null;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting Request...';
+    }
+
+    try {
+      await api.createBooking({
+        type: 'site_visit',
+        name,
+        phone,
+        date: rawDate || displayDate,
+        time: slot,
+        projectName: 'VR Agro Lands',
+        propertyCode: farmCode,
+        propertyTitle: farm?.name || 'Green Valley Farms',
+        propertyType: 'FARM_LAND',
+        message: msg,
+        notes: msg,
+        source: 'Website'
+      });
+    } catch (err) {
+      console.warn('[farmland-site-visit] API sync note:', err?.message || err);
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Request';
+      }
+    }
+
     window._farmlandNav(`/farmlands/${farmId}/site-visit-success`);
   };
 }

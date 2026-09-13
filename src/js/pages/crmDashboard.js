@@ -84,6 +84,30 @@ const label = (v) => String(v || '').replaceAll('_', ' ').toLowerCase().replace(
 const cls = (v) => 'status-' + String(v || '').toLowerCase().replaceAll('_', '-');
 const date = (v) => (v ? new Date(v).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 const initials = (v) => (String(v || 'VR').split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join('') || 'VR').toUpperCase();
+function formatUnitLabel(code, project, title) {
+  if (!code || code === '—') return title || 'General Enquiry';
+  const pStr = String(project || '').toLowerCase();
+  const cStr = String(code).trim();
+  const cUp = cStr.toUpperCase();
+
+  if (pStr.includes('villa') || cUp.startsWith('V')) {
+    return cUp.startsWith('VILLA') ? cStr : `Villa ${cStr}`;
+  }
+  if (pStr.includes('height') || pStr.includes('tower') || pStr.includes('apt') || pStr.includes('apartment') || cUp.startsWith('A-') || cUp.startsWith('B-')) {
+    return cUp.startsWith('UNIT') ? cStr : `Unit ${cStr}`;
+  }
+  if (pStr.includes('farm') || pStr.includes('agro') || cUp.startsWith('F-')) {
+    if (title && !title.startsWith('Plot') && !title.startsWith('Villa')) return title;
+    if (cUp === 'F-GREEN-VALLEY') return 'Green Valley Farms';
+    if (cUp === 'F-NATURES-NEST') return "Nature's Nest";
+    if (cUp === 'F-SIRI-AGRO') return 'Siri Agro Farms';
+    return cStr;
+  }
+  if (cUp.startsWith('P') || !isNaN(cUp)) {
+    return cUp.startsWith('PLOT') ? cStr : `Plot ${cStr}`;
+  }
+  return title || cStr;
+}
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 async function api(path, opt = {}) {
@@ -361,7 +385,7 @@ function renderEnquiryRows(rows) {
       <td>${esc(e.email || '—')}</td>
       <td>
         <b>${esc(e.project || 'VR Green Meadows')}</b>
-        <small class="crm-cell-sub">${esc(e.property && e.property !== '—' ? 'Plot ' + e.property : 'General Enquiry')}</small>
+        <small class="crm-cell-sub">${esc(formatUnitLabel(e.property, e.project))}</small>
       </td>
       <td style="max-width: 280px; white-space: normal; line-height: 1.45;">
         ${esc(e.notes || '-')}
@@ -578,7 +602,7 @@ function renderVisitRows(rows) {
         <td>${esc(v.leads?.email || '—')}</td>
         <td><b>${esc(v.properties?.projects?.name || 'VR Green Meadows')}</b></td>
         <td>
-          <b>${esc(v.properties?.property_code ? 'Plot ' + v.properties.property_code : (v.properties?.title || '—'))}</b>
+          <b>${esc(formatUnitLabel(v.properties?.property_code, v.properties?.projects?.name, v.properties?.title))}</b>
         </td>
         <td>${esc(visitDate)}</td>
         <td><b>${esc(visitTime)}</b></td>
