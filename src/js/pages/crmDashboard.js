@@ -57,7 +57,7 @@ let key = sessionStorage.getItem('vr_crm_key') || '';
 const S = {
   tab: 'overview',
   summary: null,
-  leads: [],
+  enquiries: [],
   conversations: [],
   visits: [],
   inventory: [],
@@ -65,7 +65,7 @@ const S = {
   messages: [],
   active: null,
   search: '',
-  leadFilter: 'all',
+  enquiryFilter: 'active', // 'active' or 'cancelled'
   visitFilter: 'ALL',
   inventoryFilter: 'ALL',
   bookingFilter: 'ALL',
@@ -84,6 +84,38 @@ const label = (v) => String(v || '').replaceAll('_', ' ').toLowerCase().replace(
 const cls = (v) => 'status-' + String(v || '').toLowerCase().replaceAll('_', '-');
 const date = (v) => (v ? new Date(v).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 const initials = (v) => (String(v || 'VR').split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join('') || 'VR').toUpperCase();
+
+function cleanEnquiryNotes(raw) {
+  if (!raw) return '—';
+  let str = String(raw);
+  str = str.replace(/\[AUTO-CAPTURED[^\]]*\]/gi, '');
+  str = str.replace(/Enquiry\s+ID\s*:\s*[a-zA-Z0-9_-]+/gi, '');
+  str = str.replace(/\n\s*\n/g, '\n').trim();
+  return str || '—';
+}
+
+function parseNumericPrice(val) {
+  if (!val) return 0;
+  if (typeof val === 'number') return val;
+  const s = String(val).trim();
+  if (s.toLowerCase().includes('cr')) {
+    const num = parseFloat(s.replace(/[^0-9.]/g, ''));
+    return Math.round(num * 10000000);
+  }
+  if (s.toLowerCase().includes('l')) {
+    const num = parseFloat(s.replace(/[^0-9.]/g, ''));
+    return Math.round(num * 100000);
+  }
+  const clean = s.replace(/[^0-9]/g, '');
+  return parseInt(clean, 10) || 0;
+}
+
+function formatIndianCurrency(val) {
+  const num = Number(val);
+  if (isNaN(num) || num === 0) return '₹0';
+  return '₹' + num.toLocaleString('en-IN');
+}
+
 function formatUnitLabel(code, project, title) {
   if (!code || code === '—') return title || 'General Enquiry';
   const pStr = String(project || '').toLowerCase();
@@ -108,6 +140,7 @@ function formatUnitLabel(code, project, title) {
   }
   return title || cStr;
 }
+
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 async function api(path, opt = {}) {
@@ -144,7 +177,7 @@ function login(root, msg = '') {
       <div class="crm-login-card">
         <div class="crm-brand">Real Estate Brothers group</div>
         <h1>Sales CRM</h1>
-        <p>Private workspace for enquiries, leads, WhatsApp conversations, site visits, bookings and inventory.</p>
+        <p>Private workspace for enquiries, WhatsApp conversations, site visits, bookings and inventory.</p>
         ${msg ? `<div class="crm-error">${esc(msg)}</div>` : ''}
         <form id="crm-login-form">
           <label>CRM access key
@@ -176,7 +209,6 @@ function shell(bodyContent) {
   const nav = [
     ['overview', 'Overview', '▦'],
     ['enquiries', 'Enquiries', '✉'],
-    ['leads', 'Leads', '◉'],
     ['inbox', 'WhatsApp Inbox', '◌'],
     ['visits', 'Site Visits', '⌖'],
     ['inventory', 'Inventory', '▤'],
@@ -188,7 +220,6 @@ function shell(bodyContent) {
   const descMap = {
     overview: 'A single view of sales activity and performance.',
     enquiries: 'Customer enquiries from website contact forms, brochures, and showcase modals.',
-    leads: 'Track leads with full project and property context through sales qualification.',
     inbox: 'Manage WhatsApp customer conversations and AI handoff.',
     visits: 'Review site visit requests. Confirming a visit NEVER modifies plot inventory.',
     inventory: 'Interactive Master Plan and live plot status control with full manual owner authority.',
@@ -197,11 +228,14 @@ function shell(bodyContent) {
     reminders: 'Configure automated WhatsApp site visit reminder rules.'
   };
 
+  const pendingEnquiriesCount = S.enquiries.filter((e) => (e.status || 'NEW') === 'NEW' || e.status === 'PENDING').length;
+
   return `
     <main class="crm-app">
-      <aside class="crm-sidebar">
+      <div class="crm-sidebar-backdrop" id="crm-sidebar-backdrop"></div>
+      <aside class="crm-sidebar" id="crm-sidebar">
         <div class="crm-side-brand">
-          <img src="/images/vr-logo.png" alt="Logo" class="crm-logo-img" style="width:36px;height:36px;border-radius:50%;object-fit:contain;margin-right:10px;" />
+          <img src="/images/vr-logo.png" alt="Logo" class="crm-logo-img" />
           <div>
             <b>Real Estate Brothers group</b>
             <span>Sales CRM</span>
@@ -213,7 +247,7 @@ function shell(bodyContent) {
               <i>${n[2]}</i>
               <span>${n[1]}</span>
               ${n[0] === 'visits' && S.summary?.siteVisitRequests ? `<em>${S.summary.siteVisitRequests}</em>` : ''}
-              ${n[0] === 'enquiries' && S.leads.filter((l) => (l.status || 'new') === 'new').length ? `<em>${S.leads.filter((l) => (l.status || 'new') === 'new').length}</em>` : ''}
+              ${n[0] === 'enquiries' && pendingEnquiriesCount ? `<em>${pendingEnquiriesCount}</em>` : ''}
               ${n[0] === 'reviews' && S.summary?.pendingReviews ? `<em>${S.summary.pendingReviews}</em>` : ''}
             </button>
           `).join('')}
@@ -226,10 +260,13 @@ function shell(bodyContent) {
       </aside>
       <section class="crm-main">
         <header class="crm-header">
-          <div>
-            <div class="crm-eyebrow">Real Estate Brothers group · OPERATIONS</div>
-            <h1>${label(S.tab)}</h1>
-            <p>${descMap[S.tab] || 'Manage operations'}</p>
+          <div class="crm-header-title-wrap">
+            <button class="crm-menu-toggle" id="crm-menu-toggle" aria-label="Toggle Navigation">☰</button>
+            <div>
+              <div class="crm-eyebrow">Real Estate Brothers group · OPERATIONS</div>
+              <h1>${label(S.tab)}</h1>
+              <p>${descMap[S.tab] || 'Manage operations'}</p>
+            </div>
           </div>
           <div class="crm-header-actions">
             <button class="crm-icon-btn" id="refresh" title="Refresh data">↻</button>
@@ -260,10 +297,10 @@ function overview() {
   const s = S.summary || {};
   const i = s.inventory || {};
   const totalEnquiriesCount = s.totalEnquiries || S.enquiries.length;
-  const newEnquiriesCount = s.newEnquiries || S.enquiries.filter((e) => (e.status || 'PENDING') === 'PENDING').length;
-  const pendingVisitsCount = s.siteVisitRequests || S.visits.filter((v) => v.status === 'REQUESTED').length;
+  const newEnquiriesCount = s.newEnquiries || S.enquiries.filter((e) => (e.status || 'NEW') === 'NEW' || e.status === 'PENDING').length;
+  const pendingVisitsCount = s.siteVisitRequests || S.visits.filter((v) => v.status === 'REQUESTED' || v.status === 'PENDING').length;
   const confirmedVisitsCount = s.confirmedVisits || S.visits.filter((v) => v.status === 'CONFIRMED').length;
-  const confirmedBookingsCount = s.totalBookings || s.bookings || S.bookings.filter((b) => b.status === 'CONFIRMED').length;
+  const confirmedBookingsCount = s.totalBookings || s.bookings || S.bookings.filter((b) => b.status === 'CONFIRMED' || b.status === 'BOOKED').length;
 
   return `
     <div class="crm-stats">
@@ -322,7 +359,11 @@ function overview() {
 
 function enquiries() {
   const q = S.search.toLowerCase();
-  const rows = S.enquiries.filter((e) => {
+  const activeEnqs = S.enquiries.filter((e) => e.status !== 'CANCEL');
+  const cancelledEnqs = S.enquiries.filter((e) => e.status === 'CANCEL');
+
+  const targetList = S.enquiryFilter === 'cancelled' ? cancelledEnqs : activeEnqs;
+  const rows = targetList.filter((e) => {
     if (q && ![e.name, e.phone, e.email, e.project, e.property, e.notes, e.status].some((v) => String(v || '').toLowerCase().includes(q))) return false;
     return true;
   });
@@ -333,15 +374,25 @@ function enquiries() {
         <span>⌕</span>
         <input id="enquiry-search" value="${esc(S.search)}" placeholder="Search customer, phone, property or enquiry message…">
       </div>
+      <div class="crm-filter-pills">
+        <button class="crm-filter-pill ${S.enquiryFilter === 'active' ? 'active' : ''}" data-enquiry-filter="active">
+          Active Enquiries (${activeEnqs.length})
+        </button>
+        <button class="crm-filter-pill ${S.enquiryFilter === 'cancelled' ? 'active' : ''}" data-enquiry-filter="cancelled">
+          Cancelled Enquiries (${cancelledEnqs.length})
+        </button>
+      </div>
     </div>
     <section class="crm-card">
       <div class="crm-card-head">
         <div>
-          <h2>${rows.length} Website Enquiries</h2>
-          <p>Website enquiry submissions only. Owner decision: Book plot or Cancel enquiry.</p>
+          <h2>${rows.length} ${S.enquiryFilter === 'cancelled' ? 'Cancelled' : 'Active'} Website Enquiries</h2>
+          <p>${S.enquiryFilter === 'cancelled' ? 'Enquiries marked as cancelled. You can restore or archive them.' : 'Website enquiry submissions. Action: Book plot with financial breakdown or Cancel.'}</p>
         </div>
       </div>
-      <div class="crm-table-wrap">
+      
+      <!-- Desktop Table (Hidden on <=768px) -->
+      <div class="crm-desktop-table crm-table-wrap">
         <table>
           <thead>
             <tr>
@@ -349,7 +400,7 @@ function enquiries() {
               <th>Phone</th>
               <th>Email</th>
               <th>Project / Property</th>
-              <th>Notes</th>
+              <th>Customer Notes</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
@@ -359,6 +410,11 @@ function enquiries() {
           </tbody>
         </table>
       </div>
+
+      <!-- Mobile Responsive Cards (Visible on <=768px) -->
+      <div class="crm-mobile-cards" id="enquiries-mobile-cards" style="padding: 12px;">
+        ${renderEnquiryCards(rows)}
+      </div>
     </section>
   `;
 }
@@ -367,46 +423,116 @@ function renderEnquiryRows(rows) {
   if (!rows.length) {
     return `<tr><td colspan="7"><div class="crm-empty">No website enquiries match your search.</div></td></tr>`;
   }
-  return rows.map((e) => `
-    <tr>
-      <td>
-        <div class="crm-person">
-          <span>${initials(e.name)}</span>
-          <div>
-            <b>${esc(e.name || 'Unknown')}</b>
+  return rows.map((e) => {
+    const isBooked = e.status === 'BOOKED';
+    const isCancel = e.status === 'CANCEL';
+    const cleanNotes = cleanEnquiryNotes(e.notes);
+
+    return `
+      <tr>
+        <td>
+          <div class="crm-person">
+            <span>${initials(e.name)}</span>
+            <div>
+              <b>${esc(e.name || 'Unknown')}</b>
+            </div>
+          </div>
+        </td>
+        <td>
+          <a href="https://wa.me/${String(e.phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" style="color: #128C7E; font-weight: 700; text-decoration: none;">
+            ${esc(e.phone || '—')} 💬
+          </a>
+        </td>
+        <td>${esc(e.email || '—')}</td>
+        <td>
+          <b>${esc(e.project || 'VR Green Meadows')}</b>
+          <small class="crm-cell-sub">${esc(formatUnitLabel(e.property, e.project))}</small>
+        </td>
+        <td style="max-width: 280px; white-space: normal; line-height: 1.45;">
+          ${esc(cleanNotes)}
+        </td>
+        <td>
+          <span class="crm-badge ${isBooked ? 'status-booked' : isCancel ? 'status-cancelled' : 'status-hold'}">
+            ${isBooked ? 'BOOKED' : isCancel ? 'CANCEL' : 'PENDING'}
+          </span>
+        </td>
+        <td>
+          <div style="display: flex; gap: 6px;">
+            ${isBooked ? `
+              <span style="font-size: 11px; color: #16a34a; font-weight: 700;">✓ Confirmed</span>
+            ` : isCancel ? `
+              <button class="crm-action success" data-enquiry-restore="${e.id}" title="Restore to Active">↺ Restore</button>
+              <button class="crm-action danger" data-enquiry-remove="${e.id}" title="Archive Permanently">🗑 Archive</button>
+            ` : `
+              <button class="crm-action success" data-enquiry-book="${e.id}" title="Book Plot &amp; Update Website">✓ Book</button>
+              <button class="crm-action danger" data-enquiry-cancel="${e.id}" title="Cancel Enquiry">✕ Cancel</button>
+            `}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderEnquiryCards(rows) {
+  if (!rows.length) {
+    return `<div class="crm-empty">No website enquiries match your search.</div>`;
+  }
+  return rows.map((e) => {
+    const isBooked = e.status === 'BOOKED';
+    const isCancel = e.status === 'CANCEL';
+    const cleanNotes = cleanEnquiryNotes(e.notes);
+
+    return `
+      <div class="crm-record-card">
+        <div class="crm-record-head">
+          <div class="crm-record-head-info">
+            <span class="crm-avatar">${initials(e.name)}</span>
+            <div>
+              <b style="font-size: 14px; color: #173f2c;">${esc(e.name || 'Unknown')}</b>
+              <small class="crm-cell-sub">${esc(e.email || 'No email')}</small>
+            </div>
+          </div>
+          <span class="crm-badge ${isBooked ? 'status-booked' : isCancel ? 'status-cancelled' : 'status-hold'}">
+            ${isBooked ? 'BOOKED' : isCancel ? 'CANCEL' : 'PENDING'}
+          </span>
+        </div>
+        <div class="crm-record-body">
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Phone:</span>
+            <span class="crm-record-row-val">
+              <a href="https://wa.me/${String(e.phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" style="color: #128C7E; font-weight: 700; text-decoration: none;">
+                ${esc(e.phone || '—')} 💬
+              </a>
+            </span>
+          </div>
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Project / Unit:</span>
+            <span class="crm-record-row-val">
+              ${esc(e.project || 'VR Green Meadows')} · <b>${esc(formatUnitLabel(e.property, e.project))}</b>
+            </span>
+          </div>
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Notes:</span>
+            <span class="crm-record-row-val" style="font-weight: normal; color: #4b5563;">
+              ${esc(cleanNotes)}
+            </span>
           </div>
         </div>
-      </td>
-      <td>
-        <a href="https://wa.me/${String(e.phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" style="color: #128C7E; font-weight: 700; text-decoration: none;">
-          ${esc(e.phone || '—')} 💬
-        </a>
-      </td>
-      <td>${esc(e.email || '—')}</td>
-      <td>
-        <b>${esc(e.project || 'VR Green Meadows')}</b>
-        <small class="crm-cell-sub">${esc(formatUnitLabel(e.property, e.project))}</small>
-      </td>
-      <td style="max-width: 280px; white-space: normal; line-height: 1.45;">
-        ${esc(e.notes || '-')}
-      </td>
-      <td>
-        <span class="crm-badge ${e.status === 'BOOKED' ? 'status-booked' : e.status === 'CANCEL' ? 'status-cancelled' : 'status-hold'}">
-          ${e.status === 'BOOKED' ? 'BOOKED' : e.status === 'CANCEL' ? 'CANCEL' : 'PENDING'}
-        </span>
-      </td>
-      <td>
-        <div style="display: flex; gap: 6px;">
-          ${e.status === 'BOOKED' ? `
-            <span style="font-size: 11px; color: #16a34a; font-weight: 700;">✓ Confirmed</span>
+        <div class="crm-record-actions">
+          ${isBooked ? `
+            <span style="font-size: 12px; color: #16a34a; font-weight: 700; padding: 6px;">✓ Confirmed Booking</span>
+          ` : isCancel ? `
+            <button class="crm-action success" data-enquiry-restore="${e.id}" title="Restore to Active">↺ Restore</button>
+            <button class="crm-action danger" data-enquiry-remove="${e.id}" title="Archive Permanently">🗑 Archive</button>
           ` : `
             <button class="crm-action success" data-enquiry-book="${e.id}" title="Book Plot &amp; Update Website">✓ Book</button>
             <button class="crm-action danger" data-enquiry-cancel="${e.id}" title="Cancel Enquiry">✕ Cancel</button>
           `}
         </div>
-      </td>
-    </tr>
-  `).join('');
+      </div>
+    `;
+  }).join('');
 }
 
 function inbox() {
@@ -475,7 +601,7 @@ function inbox() {
           <div class="crm-card-head">
             <div>
               <h2>Customer</h2>
-              <p>Lead record</p>
+              <p>Contact details</p>
             </div>
           </div>
           <div class="crm-contact">
@@ -536,10 +662,12 @@ function visits() {
       <div class="crm-card-head">
         <div>
           <h2>${rows.length} Site Visits</h2>
-          <p>Site visit appointments only (plot remains Available). When customer decides to purchase, convert to BOOKED to confirm booking.</p>
+          <p>Site visit appointments only (plot remains AVAILABLE). When customer decides to purchase, click Book to confirm booking.</p>
         </div>
       </div>
-      <div class="crm-table-wrap">
+
+      <!-- Desktop Table -->
+      <div class="crm-desktop-table crm-table-wrap">
         <table>
           <thead>
             <tr>
@@ -560,6 +688,11 @@ function visits() {
             ${renderVisitRows(rows)}
           </tbody>
         </table>
+      </div>
+
+      <!-- Mobile Responsive Cards -->
+      <div class="crm-mobile-cards" id="visits-mobile-cards" style="padding: 12px;">
+        ${renderVisitCards(rows)}
       </div>
     </section>
   `;
@@ -634,6 +767,83 @@ function renderVisitRows(rows) {
   }).join('');
 }
 
+function renderVisitCards(rows) {
+  if (!rows.length) {
+    return `<div class="crm-empty">No site visits match this filter.</div>`;
+  }
+  return rows.map((v) => {
+    const src = v.source || (v.notes && v.notes.includes('WhatsApp') ? 'WhatsApp AI' : (v.notes && v.notes.includes('Offline') ? 'Offline' : 'Website'));
+    const displayStatus = v.status === 'REQUESTED' ? 'PENDING' : v.status;
+    const statusClass = displayStatus === 'PENDING' ? 'status-hold' : cls(v.status);
+
+    let visitDate = '—';
+    let visitTime = 'Anytime';
+    if (v.scheduled_at) {
+      const d = new Date(v.scheduled_at);
+      if (!Number.isNaN(d.getTime())) {
+        visitDate = d.toLocaleDateString('en-IN', { dateStyle: 'medium' });
+        visitTime = d.toLocaleTimeString('en-IN', { timeStyle: 'short' });
+      }
+    }
+
+    return `
+      <div class="crm-record-card">
+        <div class="crm-record-head">
+          <div class="crm-record-head-info">
+            <span class="crm-avatar">${initials(v.leads?.name)}</span>
+            <div>
+              <b style="font-size: 14px; color: #173f2c;">${esc(v.leads?.name || 'Unknown')}</b>
+              <small class="crm-cell-sub">${esc(v.leads?.email || 'No email')}</small>
+            </div>
+          </div>
+          <span class="crm-badge ${statusClass}">${displayStatus}</span>
+        </div>
+        <div class="crm-record-body">
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Phone:</span>
+            <span class="crm-record-row-val">
+              <a href="https://wa.me/${String(v.leads?.phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" style="color: #128C7E; font-weight: 700; text-decoration: none;">
+                ${esc(v.leads?.phone || '—')} 💬
+              </a>
+            </span>
+          </div>
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Plot / Unit:</span>
+            <span class="crm-record-row-val">
+              ${esc(v.properties?.projects?.name || 'VR Green Meadows')} · <b>${esc(formatUnitLabel(v.properties?.property_code, v.properties?.projects?.name, v.properties?.title))}</b>
+            </span>
+          </div>
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Date &amp; Time:</span>
+            <span class="crm-record-row-val">${esc(visitDate)} · ${esc(visitTime)}</span>
+          </div>
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Source:</span>
+            <span class="crm-record-row-val"><span class="crm-badge">${esc(src)}</span></span>
+          </div>
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Notes:</span>
+            <span class="crm-record-row-val" style="font-weight: normal; color: #4b5563;">${esc(v.notes || '—')}</span>
+          </div>
+        </div>
+        <div class="crm-record-actions">
+          ${v.status === 'REQUESTED' || v.status === 'PENDING' || v.status === 'RESCHEDULED' ? `
+            <button class="crm-action success" data-confirm-visit="${v.id}" title="Confirm site visit &amp; send WhatsApp">✓ Confirm</button>
+            <button class="crm-action" data-visit-book="${v.id}" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;" title="Customer booked this plot">★ Book</button>
+            <button class="crm-action danger" data-cancel-visit="${v.id}">✕ Cancel</button>
+          ` : v.status === 'CONFIRMED' ? `
+            <button class="crm-action" data-visit-book="${v.id}" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;" title="Customer booked this plot">★ Book</button>
+            <button class="crm-action" data-complete-visit="${v.id}">Complete</button>
+            <button class="crm-action danger" data-cancel-visit="${v.id}">Cancel</button>
+          ` : v.status === 'BOOKED' ? `
+            <span style="font-size: 12px; color: #16a34a; font-weight: 700; padding: 6px;">✓ Booked</span>
+          ` : '—'}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 function inventory() {
   const currentProj = CRM_PROJECTS.find((p) => p.slug === S.selectedProject) || CRM_PROJECTS[0];
   const rows = S.inventory.filter((p) => {
@@ -647,7 +857,6 @@ function inventory() {
   });
 
   return `
-    <!-- 1. Projects List Selector Pills (Section 6 & 12) -->
     <div class="crm-project-pills">
       ${CRM_PROJECTS.map((p) => `
         <button class="crm-project-pill ${S.selectedProject === p.slug ? 'active' : ''}" data-crm-project="${p.slug}">
@@ -656,7 +865,6 @@ function inventory() {
       `).join('')}
     </div>
 
-    <!-- 2. Inventory Toolbar -->
     <div class="crm-toolbar">
       <select id="inventory-filter">
         <option value="ALL">All Statuses</option>
@@ -670,12 +878,11 @@ function inventory() {
       <button class="crm-icon-btn" id="inventory-refresh" title="Refresh Inventory">↻</button>
     </div>
 
-    <!-- 3. Content View: Master Plan or Table -->
     <section class="crm-card">
       <div class="crm-card-head">
         <div>
           <h2>${currentProj.name}</h2>
-          <p>Click any plot to view customer details, record offline bookings, and control manual status with <strong>no automatic hold expiry</strong>.</p>
+          <p>Click any plot to view customer details, edit listed price, record offline bookings, and control manual status with <strong>no automatic hold expiry</strong>.</p>
         </div>
       </div>
 
@@ -743,7 +950,6 @@ function renderMasterPlanView(proj) {
     `;
   }
 
-  // Fallback interactive grid for other projects
   const items = S.inventory.filter((x) => x.projects?.slug === proj.slug || !x.projects?.slug);
   return `
     <div style="padding: 24px; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px;">
@@ -771,6 +977,7 @@ function renderInventoryTableView(rows) {
             <th>Project</th>
             <th>Type</th>
             <th>Area</th>
+            <th>Listed Price</th>
             <th>Status</th>
             <th>Active Customer</th>
             <th>Actions</th>
@@ -778,8 +985,8 @@ function renderInventoryTableView(rows) {
         </thead>
         <tbody>
           ${rows.map((p) => {
-    const b = p.active_booking;
-    return `
+            const b = p.active_booking;
+            return `
               <tr>
                 <td>
                   <b>${esc(p.property_code)}</b>
@@ -788,6 +995,7 @@ function renderInventoryTableView(rows) {
                 <td>${esc(p.projects?.name || 'VR Green Meadows')}</td>
                 <td>${esc(p.property_type || 'PLOT')}</td>
                 <td>${p.area ? `${esc(p.area)} ${esc(p.area_unit || '')}` : '—'}</td>
+                <td><b>${formatIndianCurrency(p.price)}</b></td>
                 <td><span class="crm-badge ${cls(p.inventory_status)}">${label(p.inventory_status)}</span></td>
                 <td>
                   ${b ? `
@@ -805,7 +1013,7 @@ function renderInventoryTableView(rows) {
                 </td>
               </tr>
             `;
-  }).join('') || `<tr><td colspan="7"><div class="crm-empty">No inventory found.</div></td></tr>`}
+          }).join('') || `<tr><td colspan="8"><div class="crm-empty">No inventory found.</div></td></tr>`}
         </tbody>
       </table>
     </div>
@@ -818,6 +1026,7 @@ function renderPlotDrawerHtml() {
 
   const status = p.inventory_status || 'AVAILABLE';
   const b = p.active_booking;
+  const numericPrice = parseNumericPrice(p.price) || 3200000;
 
   return `
     <div class="crm-drawer-backdrop" id="crm-drawer-backdrop">
@@ -845,8 +1054,8 @@ function renderPlotDrawerHtml() {
               <strong>${p.area ? `${p.area} ${p.area_unit || 'Sq.Yds'}` : '200 Sq.Yds'}</strong>
             </div>
             <div>
-              <span>Price</span>
-              <strong>${p.price ? '₹' + Number(p.price).toLocaleString('en-IN') : '₹32,00,000'}</strong>
+              <span>Listed Price</span>
+              <strong>${formatIndianCurrency(numericPrice)}</strong>
             </div>
             <div>
               <span>Facing</span>
@@ -854,13 +1063,24 @@ function renderPlotDrawerHtml() {
             </div>
           </div>
 
-          <!-- Active Customer Information Card (Section 6 & 11) -->
+          ${status === 'AVAILABLE' ? `
+            <div class="crm-drawer-section">
+              <h3>Owner Price Control</h3>
+              <p style="font-size: 11px; color: #6b7280; margin: 0 0 8px;">Edit official listed price. Updates website and master plan immediately.</p>
+              <div style="display: flex; gap: 8px;">
+                <input type="number" id="drawer-edit-price" value="${numericPrice}" style="flex: 1; padding: 8px 10px; border: 1px solid #dfe2dd; border-radius: 8px; font-size: 13px;">
+                <button class="crm-primary" id="drawer-save-price" style="padding: 8px 14px;">Save Price</button>
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Customer Information Card -->
           ${b || status === 'BOOKED' || status === 'HOLD' || status === 'SOLD' ? `
             <div class="crm-drawer-section">
-              <h3>Customer Information</h3>
+              <h3>Customer &amp; Financial Details</h3>
               <div class="crm-drawer-customer-card">
                 <div class="crm-drawer-customer-row">
-                  <span>Name:</span>
+                  <span>Customer:</span>
                   <b>${esc(b?.customer_name || 'Recorded Customer')}</b>
                 </div>
                 <div class="crm-drawer-customer-row">
@@ -879,21 +1099,27 @@ function renderPlotDrawerHtml() {
                   <span>Source:</span>
                   <b class="crm-badge">${esc(b?.source || 'Offline')}</b>
                 </div>
-                ${b?.booking_reference ? `
+                ${b?.final_price ? `
                   <div class="crm-drawer-customer-row">
-                    <span>Reference:</span>
-                    <b>${esc(b.booking_reference)}</b>
+                    <span>Final Agreed Price:</span>
+                    <b style="color: #173f2c; font-weight: 800;">₹${Number(b.final_price).toLocaleString('en-IN')}</b>
                   </div>
                 ` : ''}
                 ${b?.amount ? `
                   <div class="crm-drawer-customer-row">
-                    <span>Advance Paid:</span>
-                    <b>₹${Number(b.amount).toLocaleString('en-IN')}</b>
+                    <span>Advance Amount Paid:</span>
+                    <b style="color: #166534; font-weight: 800;">₹${Number(b.amount).toLocaleString('en-IN')}</b>
+                  </div>
+                ` : ''}
+                ${b?.remaining_amount != null ? `
+                  <div class="crm-drawer-customer-row" style="border-top: 1px dashed #cbd5e1; padding-top: 6px;">
+                    <span style="color: #dc2626; font-weight: 700;">Remaining Balance:</span>
+                    <b style="color: #dc2626; font-weight: 800;">₹${Number(b.remaining_amount).toLocaleString('en-IN')}</b>
                   </div>
                 ` : ''}
                 ${b?.booked_at ? `
                   <div class="crm-drawer-customer-row">
-                    <span>Date:</span>
+                    <span>Booking Date:</span>
                     <b>${date(b.booked_at)}</b>
                   </div>
                 ` : ''}
@@ -909,7 +1135,7 @@ function renderPlotDrawerHtml() {
             </div>
           `}
 
-          <!-- Audit History Timeline (Section 24) -->
+          <!-- Audit History Timeline -->
           <div class="crm-drawer-section">
             <h3>Audit History</h3>
             <div class="crm-history-list" id="drawer-history-list">
@@ -922,7 +1148,7 @@ function renderPlotDrawerHtml() {
             </div>
           </div>
 
-          <!-- Owner Manual Status Actions (Sections 7 & 11) -->
+          <!-- Owner Manual Status Actions -->
           <div class="crm-drawer-actions">
             ${status === 'AVAILABLE' ? `
               <button class="crm-primary" data-drawer-offline="${p.id}">+ Add Offline Customer</button>
@@ -987,7 +1213,9 @@ function bookings() {
           <p>Central record of confirmed property bookings. Plot inventory is synchronized immediately.</p>
         </div>
       </div>
-      <div class="crm-table-wrap">
+
+      <!-- Desktop Table -->
+      <div class="crm-desktop-table crm-table-wrap">
         <table>
           <thead>
             <tr>
@@ -996,10 +1224,10 @@ function bookings() {
               <th>Email</th>
               <th>Project</th>
               <th>Plot / Property</th>
+              <th>Financial Breakdown</th>
               <th>Booking Date</th>
               <th>Source</th>
               <th>Status</th>
-              <th>Notes</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -1007,6 +1235,11 @@ function bookings() {
             ${renderBookingRows(rows)}
           </tbody>
         </table>
+      </div>
+
+      <!-- Mobile Responsive Cards -->
+      <div class="crm-mobile-cards" id="bookings-mobile-cards" style="padding: 12px;">
+        ${renderBookingCards(rows)}
       </div>
     </section>
   `;
@@ -1039,26 +1272,102 @@ function renderBookingRows(rows) {
           <b>${esc(b.properties?.property_code ? 'Plot ' + b.properties.property_code : (b.properties?.title || '—'))}</b>
           ${b.booking_reference ? `<small class="crm-cell-sub">Ref: ${esc(b.booking_reference)}</small>` : ''}
         </td>
+        <td style="font-size: 12px; line-height: 1.4;">
+          ${b.final_price ? `<div>Final: <b>₹${Number(b.final_price).toLocaleString('en-IN')}</b></div>` : ''}
+          ${b.amount ? `<div style="color:#166534;">Advance: <b>₹${Number(b.amount).toLocaleString('en-IN')}</b></div>` : ''}
+          ${b.remaining_amount != null ? `<div style="color:#dc2626;">Due: <b>₹${Number(b.remaining_amount).toLocaleString('en-IN')}</b></div>` : ''}
+        </td>
         <td>${date(b.booked_at || b.created_at)}</td>
         <td><span class="crm-badge">${esc(src)}</span></td>
         <td><span class="crm-badge ${cls(b.status)}">${label(b.status)}</span></td>
-        <td style="max-width: 220px; white-space: normal; font-size: 12px; line-height: 1.4;">
-          ${b.amount ? `<div style="font-weight: 700; color: #166534; margin-bottom: 2px;">Advance: ₹${Number(b.amount).toLocaleString('en-IN')}</div>` : ''}
-          ${esc(b.notes || '—')}
-        </td>
         <td>
           <div style="display: flex; gap: 6px;">
-            ${b.status === 'CONFIRMED' ? `
-              <button class="crm-action" data-booking-complete="${b.id}">Complete</button>
-              <button class="crm-action danger" data-booking-cancel="${b.id}">Cancel</button>
+            ${b.status === 'CONFIRMED' || b.status === 'PENDING' ? `
+              <button class="crm-action success" data-booking-complete="${b.id}" title="Mark sale completed &amp; mark plot SOLD">Complete</button>
+              <button class="crm-action danger" data-booking-cancel="${b.id}" title="Cancel booking &amp; release plot back to AVAILABLE">Cancel</button>
             ` : b.status === 'COMPLETED' ? `
-              <span style="font-size: 11px; color: #16a34a; font-weight: 700;">✓ Completed</span>
+              <span style="font-size: 11px; color: #16a34a; font-weight: 700;">✓ Completed (Sold)</span>
             ` : `
-              <span style="font-size: 11px; color: #dc2626; font-weight: 700;">Cancelled</span>
+              <span style="font-size: 11px; color: #dc2626; font-weight: 700;">Cancelled (Released)</span>
             `}
           </div>
         </td>
       </tr>
+    `;
+  }).join('');
+}
+
+function renderBookingCards(rows) {
+  if (!rows.length) {
+    return `<div class="crm-empty">No confirmed bookings found.</div>`;
+  }
+  return rows.map((b) => {
+    const src = b.leads?.source || (b.notes && b.notes.includes('Offline') ? 'Offline' : (b.notes && b.notes.includes('Enquiry') ? 'Website Enquiry' : 'Website'));
+    return `
+      <div class="crm-record-card">
+        <div class="crm-record-head">
+          <div class="crm-record-head-info">
+            <span class="crm-avatar">${initials(b.leads?.name)}</span>
+            <div>
+              <b style="font-size: 14px; color: #173f2c;">${esc(b.leads?.name || 'Unknown')}</b>
+              <small class="crm-cell-sub">${esc(b.leads?.email || 'No email')}</small>
+            </div>
+          </div>
+          <span class="crm-badge ${cls(b.status)}">${label(b.status)}</span>
+        </div>
+        <div class="crm-record-body">
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Phone:</span>
+            <span class="crm-record-row-val">
+              <a href="https://wa.me/${String(b.leads?.phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" style="color: #128C7E; font-weight: 700; text-decoration: none;">
+                ${esc(b.leads?.phone || '—')} 💬
+              </a>
+            </span>
+          </div>
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Plot:</span>
+            <span class="crm-record-row-val">
+              ${esc(b.properties?.projects?.name || 'VR Green Meadows')} · <b>${esc(b.properties?.property_code ? 'Plot ' + b.properties.property_code : (b.properties?.title || '—'))}</b>
+            </span>
+          </div>
+          ${b.final_price ? `
+            <div class="crm-record-row">
+              <span class="crm-record-row-label">Final Agreed:</span>
+              <span class="crm-record-row-val">₹${Number(b.final_price).toLocaleString('en-IN')}</span>
+            </div>
+          ` : ''}
+          ${b.amount ? `
+            <div class="crm-record-row">
+              <span class="crm-record-row-label">Advance Paid:</span>
+              <span class="crm-record-row-val" style="color: #166534;">₹${Number(b.amount).toLocaleString('en-IN')}</span>
+            </div>
+          ` : ''}
+          ${b.remaining_amount != null ? `
+            <div class="crm-record-row">
+              <span class="crm-record-row-label" style="color: #dc2626;">Balance Due:</span>
+              <span class="crm-record-row-val" style="color: #dc2626;">₹${Number(b.remaining_amount).toLocaleString('en-IN')}</span>
+            </div>
+          ` : ''}
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Date:</span>
+            <span class="crm-record-row-val">${date(b.booked_at || b.created_at)}</span>
+          </div>
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Source:</span>
+            <span class="crm-record-row-val"><span class="crm-badge">${esc(src)}</span></span>
+          </div>
+        </div>
+        <div class="crm-record-actions">
+          ${b.status === 'CONFIRMED' || b.status === 'PENDING' ? `
+            <button class="crm-action success" data-booking-complete="${b.id}" title="Complete sale">Complete (Sold)</button>
+            <button class="crm-action danger" data-booking-cancel="${b.id}" title="Cancel booking">Cancel (Release Plot)</button>
+          ` : b.status === 'COMPLETED' ? `
+            <span style="font-size: 12px; color: #16a34a; font-weight: 700; padding: 6px;">✓ Completed (Sold)</span>
+          ` : `
+            <span style="font-size: 12px; color: #dc2626; font-weight: 700; padding: 6px;">Cancelled (Released)</span>
+          `}
+        </div>
+      </div>
     `;
   }).join('');
 }
@@ -1206,10 +1515,12 @@ function reviews() {
       <div class="crm-card-head">
         <div>
           <h2>Review Approval Management</h2>
-          <p>Only reviews marked as <strong>APPROVED</strong> and <strong>SHOW</strong> appear on the public website. Customers cannot submit reviews publicly.</p>
+          <p>Only reviews marked as <strong>APPROVED</strong> and <strong>SHOW</strong> appear on the public website.</p>
         </div>
       </div>
-      <div class="crm-table-wrap">
+
+      <!-- Desktop Table -->
+      <div class="crm-desktop-table crm-table-wrap">
         <table>
           <thead>
             <tr>
@@ -1228,6 +1539,11 @@ function reviews() {
             ${renderReviewRows(rows)}
           </tbody>
         </table>
+      </div>
+
+      <!-- Mobile Responsive Cards -->
+      <div class="crm-mobile-cards" id="reviews-mobile-cards" style="padding: 12px;">
+        ${renderReviewCards(rows)}
       </div>
     </section>
   `;
@@ -1298,6 +1614,66 @@ function renderReviewRows(rows) {
   }).join('');
 }
 
+function renderReviewCards(rows) {
+  if (!rows.length) {
+    return `<div class="crm-empty">No reviews match your filter.</div>`;
+  }
+  return rows.map((r) => {
+    const isApproved = r.status === 'APPROVED';
+    const isVisible = Boolean(r.is_visible);
+    const starStr = '★'.repeat(Math.min(5, Math.max(1, r.rating || 5))) + '☆'.repeat(Math.max(0, 5 - Math.min(5, Math.max(1, r.rating || 5))));
+
+    return `
+      <div class="crm-record-card">
+        <div class="crm-record-head">
+          <div class="crm-record-head-info">
+            <span class="crm-avatar">${initials(r.reviewer_name)}</span>
+            <div>
+              <b style="font-size: 14px; color: #173f2c;">${esc(r.reviewer_name || 'Google User')}</b>
+              <small class="crm-cell-sub">${esc(r.source || 'Google')}</small>
+            </div>
+          </div>
+          <span class="crm-badge ${cls(r.status)}">${label(r.status)}</span>
+        </div>
+        <div class="crm-record-body">
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Rating:</span>
+            <span class="crm-record-row-val" style="color: #f59e0b;">${starStr} (${r.rating || 5}/5)</span>
+          </div>
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Review:</span>
+            <span class="crm-record-row-val" style="font-weight: normal; color: #4b5563;">${esc(r.review_text || '')}</span>
+          </div>
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Visibility:</span>
+            <span class="crm-record-row-val">
+              <span class="crm-badge" style="${isVisible ? 'background:#dcfce7; color:#15803d;' : 'background:#fee2e2; color:#b91c1c;'}">
+                ${isVisible ? '● SHOW' : '○ HIDE'}
+              </span>
+            </span>
+          </div>
+        </div>
+        <div class="crm-record-actions">
+          ${!isApproved || !isVisible ? `
+            <button class="crm-small-btn" data-review-approve="${r.id}" style="background:#dcfce7; border-color:#22c55e; color:#15803d; font-weight:600;">
+              ✓ Approve &amp; Show
+            </button>
+          ` : ''}
+          ${isVisible ? `
+            <button class="crm-small-btn" data-review-hide="${r.id}" style="background:#fee2e2; border-color:#ef4444; color:#b91c1c;">
+              Hide
+            </button>
+          ` : `
+            <button class="crm-small-btn" data-review-show="${r.id}">
+              Show
+            </button>
+          `}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 function body() {
   return ({
     overview,
@@ -1329,7 +1705,6 @@ async function load() {
   S.bookings = f.bookings || [];
   S.reviews = g.reviews || [];
 
-  // If active plot is open, keep it updated
   if (S.activePlotDetail) {
     const fresh = S.inventory.find((x) => x.id === S.activePlotDetail.id);
     if (fresh) S.activePlotDetail = fresh;
@@ -1359,7 +1734,12 @@ function modal(html) {
 function enquiryBookingModal(enquiryId) {
   const enq = S.enquiries.find((x) => x.id === enquiryId);
   if (!enq) return;
+
   const availableProps = S.inventory.filter((x) => x.inventory_status === 'AVAILABLE' || x.id === enq.property_id);
+  const preselected = availableProps.find((x) => x.id === enq.property_id || (enq.property && x.property_code === enq.property)) || availableProps[0];
+  const defaultListedPrice = preselected ? (parseNumericPrice(preselected.price) || 3200000) : 3200000;
+  const defaultAdvance = 100000;
+
   modal(`
     <button class="crm-modal-close" data-close>×</button>
     <div class="crm-eyebrow">CONFIRM ENQUIRY BOOKING</div>
@@ -1372,21 +1752,48 @@ function enquiryBookingModal(enquiryId) {
         <div><strong>Customer:</strong> ${esc(enq.name)}</div>
         <div><strong>Phone:</strong> ${esc(enq.phone)}</div>
         <div><strong>Email:</strong> ${esc(enq.email || '—')}</div>
-        <div><strong>Customer Note:</strong> ${esc(enq.notes || '—')}</div>
+        <div><strong>Customer Note:</strong> ${esc(cleanEnquiryNotes(enq.notes))}</div>
       </div>
       <label>Select Plot / Property to Book *
-        <select name="property_id" required>
-          ${availableProps.map((p) => `
-            <option value="${p.id}" ${p.id === enq.property_id || (enq.property && p.property_code === enq.property) ? 'selected' : ''}>
-              ${esc(p.property_code)} · ${esc(p.title || p.projects?.name || 'Unit')} (${p.inventory_status})
-            </option>
-          `).join('')}
+        <select name="property_id" id="enq-property-select" required>
+          ${availableProps.map((p) => {
+            const numP = parseNumericPrice(p.price);
+            const isSel = p.id === preselected?.id;
+            return `
+              <option value="${p.id}" data-price="${numP}" ${isSel ? 'selected' : ''}>
+                ${esc(p.property_code)} · ${esc(p.title || p.projects?.name || 'Unit')} — ${formatIndianCurrency(numP || p.price)}
+              </option>
+            `;
+          }).join('')}
         </select>
       </label>
-      <label>Advance Amount Received (₹) (Optional)
-        <input name="amount" type="number" placeholder="e.g. 100000">
-      </label>
-      <label>Booking Notes (Optional)
+
+      <div class="crm-price-summary-box">
+        <div class="crm-calc-row">
+          <span>Official Listed Price:</span>
+          <strong id="display-listed-price">${formatIndianCurrency(defaultListedPrice)}</strong>
+          <input type="hidden" name="listed_price" id="input-listed-price" value="${defaultListedPrice}">
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <label>Final Agreed Price (₹) *
+          <input name="final_price" id="input-final-price" type="number" required value="${defaultListedPrice}">
+        </label>
+        <label>Advance Amount (₹) *
+          <input name="advance" id="input-advance" type="number" required value="${defaultAdvance}" placeholder="e.g. 100000">
+        </label>
+      </div>
+
+      <div class="crm-price-summary-box">
+        <div class="crm-calc-row highlight due">
+          <span>Remaining Balance Due:</span>
+          <strong id="calc-remaining-amount">${formatIndianCurrency(Math.max(0, defaultListedPrice - defaultAdvance))}</strong>
+          <input type="hidden" name="remaining_amount" id="input-remaining-amount" value="${Math.max(0, defaultListedPrice - defaultAdvance)}">
+        </div>
+      </div>
+
+      <label>Booking Notes / Terms (Optional)
         <textarea name="notes" rows="2" placeholder="Payment reference or remarks"></textarea>
       </label>
       <div class="crm-modal-actions">
@@ -1396,16 +1803,51 @@ function enquiryBookingModal(enquiryId) {
     </form>
   `);
 
+  const propSelect = document.getElementById('enq-property-select');
+  const dispListed = document.getElementById('display-listed-price');
+  const inListed = document.getElementById('input-listed-price');
+  const inFinal = document.getElementById('input-final-price');
+  const inAdvance = document.getElementById('input-advance');
+  const dispRemain = document.getElementById('calc-remaining-amount');
+  const inRemain = document.getElementById('input-remaining-amount');
+
+  function updatePrices() {
+    const finalVal = parseFloat(inFinal.value) || 0;
+    const advVal = parseFloat(inAdvance.value) || 0;
+    const remaining = Math.max(0, finalVal - advVal);
+    dispRemain.textContent = formatIndianCurrency(remaining);
+    inRemain.value = remaining;
+  }
+
+  propSelect?.addEventListener('change', () => {
+    const opt = propSelect.selectedOptions[0];
+    const pPrice = parseFloat(opt?.dataset?.price) || defaultListedPrice;
+    dispListed.textContent = formatIndianCurrency(pPrice);
+    inListed.value = pPrice;
+    inFinal.value = pPrice;
+    updatePrices();
+  });
+
+  inFinal?.addEventListener('input', updatePrices);
+  inAdvance?.addEventListener('input', updatePrices);
+
   document.getElementById('enquiry-book-form').onsubmit = async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target));
+    const finalPrice = parseFloat(data.final_price) || 0;
+    const advance = parseFloat(data.advance) || 0;
+    const remaining = Math.max(0, finalPrice - advance);
+
     try {
       await api(`/api/crm/enquiries/${enquiryId}`, {
         method: 'PATCH',
         body: JSON.stringify({
           status: 'BOOKED',
           property_id: data.property_id,
-          amount: data.amount ? Number(data.amount) : null,
+          final_price: finalPrice,
+          advance: advance,
+          remaining_amount: remaining,
+          amount: advance,
           notes: data.notes
         })
       });
@@ -1425,13 +1867,42 @@ function enquiryBookingModal(enquiryId) {
 }
 
 async function cancelEnquiry(enquiryId) {
-  if (!confirm('Mark this enquiry as CANCEL? (Record will be kept in history; inventory remains unchanged)')) return;
+  if (!confirm('Mark this enquiry as CANCEL? (Record will be moved to Cancelled Enquiries; inventory remains unchanged)')) return;
   try {
     await api(`/api/crm/enquiries/${enquiryId}`, {
       method: 'PATCH',
       body: JSON.stringify({ status: 'CANCEL' })
     });
-    showToast('Enquiry marked as CANCEL. Inventory unchanged.');
+    showToast('Enquiry moved to Cancelled Enquiries. Inventory unchanged.');
+    await load();
+    render();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function restoreEnquiry(enquiryId) {
+  try {
+    await api(`/api/crm/enquiries/${enquiryId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'NEW' })
+    });
+    showToast('Enquiry restored to Active.');
+    await load();
+    render();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+async function archiveEnquiry(enquiryId) {
+  if (!confirm('Archive and permanently remove this enquiry?')) return;
+  try {
+    await api(`/api/crm/enquiries/${enquiryId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'REMOVE' })
+    });
+    showToast('Enquiry archived.');
     await load();
     render();
   } catch (err) {
@@ -1530,6 +2001,9 @@ function visitBookingModal(visitId) {
   if (!v) return;
   const prop = v.properties;
   const lead = v.leads;
+  const defaultListedPrice = parseNumericPrice(prop?.price) || 3200000;
+  const defaultAdvance = 100000;
+
   modal(`
     <button class="crm-modal-close" data-close>×</button>
     <div class="crm-eyebrow">CONVERT SITE VISIT TO BOOKED</div>
@@ -1543,9 +2017,31 @@ function visitBookingModal(visitId) {
         <div><strong>Phone:</strong> ${esc(lead?.phone || '—')}</div>
         <div><strong>Property:</strong> Plot ${esc(prop?.property_code || '—')} (${esc(prop?.projects?.name || 'VR Green Meadows')})</div>
       </div>
-      <label>Advance Amount Received (₹) (Optional)
-        <input name="amount" type="number" placeholder="e.g. 100000">
-      </label>
+
+      <div class="crm-price-summary-box">
+        <div class="crm-calc-row">
+          <span>Official Listed Price:</span>
+          <strong>${formatIndianCurrency(defaultListedPrice)}</strong>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <label>Final Agreed Price (₹) *
+          <input name="final_price" id="v-final-price" type="number" required value="${defaultListedPrice}">
+        </label>
+        <label>Advance Amount Received (₹) *
+          <input name="advance" id="v-advance" type="number" required value="${defaultAdvance}" placeholder="e.g. 100000">
+        </label>
+      </div>
+
+      <div class="crm-price-summary-box">
+        <div class="crm-calc-row highlight due">
+          <span>Remaining Balance Due:</span>
+          <strong id="v-calc-remaining">${formatIndianCurrency(Math.max(0, defaultListedPrice - defaultAdvance))}</strong>
+          <input type="hidden" name="remaining_amount" id="v-input-remaining" value="${Math.max(0, defaultListedPrice - defaultAdvance)}">
+        </div>
+      </div>
+
       <label>Booking Notes
         <textarea name="notes" rows="2" placeholder="Payment receipt, terms agreed, etc."></textarea>
       </label>
@@ -1556,15 +2052,38 @@ function visitBookingModal(visitId) {
     </form>
   `);
 
+  const inFinal = document.getElementById('v-final-price');
+  const inAdvance = document.getElementById('v-advance');
+  const dispRemain = document.getElementById('v-calc-remaining');
+  const inRemain = document.getElementById('v-input-remaining');
+
+  function updatePrices() {
+    const finalVal = parseFloat(inFinal.value) || 0;
+    const advVal = parseFloat(inAdvance.value) || 0;
+    const remaining = Math.max(0, finalVal - advVal);
+    dispRemain.textContent = formatIndianCurrency(remaining);
+    inRemain.value = remaining;
+  }
+
+  inFinal?.addEventListener('input', updatePrices);
+  inAdvance?.addEventListener('input', updatePrices);
+
   document.getElementById('visit-book-form').onsubmit = async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target));
+    const finalPrice = parseFloat(data.final_price) || 0;
+    const advance = parseFloat(data.advance) || 0;
+    const remaining = Math.max(0, finalPrice - advance);
+
     try {
       await api(`/api/crm/site-visits/${visitId}`, {
         method: 'PATCH',
         body: JSON.stringify({
           status: 'BOOKED',
-          amount: data.amount ? Number(data.amount) : null,
+          final_price: finalPrice,
+          advance: advance,
+          remaining_amount: remaining,
+          amount: advance,
           notes: data.notes
         })
       });
@@ -1581,7 +2100,11 @@ function visitBookingModal(visitId) {
 }
 
 function offlineBookingModal(preselectedPropertyId = '') {
-  const availableProps = S.inventory.filter((x) => x.inventory_status === 'AVAILABLE' || x.id === preselectedPropertyId);
+  const availableProps = S.inventory.filter((x) => x.inventory_status === 'AVAILABLE' || x.inventory_status === 'HOLD' || x.id === preselectedPropertyId);
+  const preselected = availableProps.find((x) => x.id === preselectedPropertyId) || availableProps[0];
+  const defaultListedPrice = preselected ? (parseNumericPrice(preselected.price) || 3200000) : 3200000;
+  const defaultAdvance = 100000;
+
   modal(`
     <button class="crm-modal-close" data-close>×</button>
     <div class="crm-eyebrow">OFFLINE CUSTOMER BOOKING</div>
@@ -1600,12 +2123,16 @@ function offlineBookingModal(preselectedPropertyId = '') {
         <input name="customer_email" type="email" placeholder="customer@example.com" />
       </label>
       <label>Select Property / Plot *
-        <select name="property_id" required>
-          ${availableProps.map((p) => `
-            <option value="${p.id}" ${p.id === preselectedPropertyId ? 'selected' : ''}>
-              ${esc(p.property_code)} · ${esc(p.title || p.projects?.name || 'Unit')} (${p.inventory_status})
-            </option>
-          `).join('')}
+        <select name="property_id" id="off-property-select" required>
+          ${availableProps.map((p) => {
+            const numP = parseNumericPrice(p.price);
+            const isSel = p.id === (preselected?.id);
+            return `
+              <option value="${p.id}" data-price="${numP}" ${isSel ? 'selected' : ''}>
+                ${esc(p.property_code)} · ${esc(p.title || p.projects?.name || 'Unit')} (${p.inventory_status}) — ${formatIndianCurrency(numP || p.price)}
+              </option>
+            `;
+          }).join('')}
         </select>
       </label>
       <label>Booking Status *
@@ -1616,9 +2143,32 @@ function offlineBookingModal(preselectedPropertyId = '') {
           <option value="BLOCKED">BLOCKED (Admin Restricted)</option>
         </select>
       </label>
-      <label>Advance Amount Received (₹)
-        <input name="amount" type="number" placeholder="e.g. 100000" />
-      </label>
+
+      <div class="crm-price-summary-box">
+        <div class="crm-calc-row">
+          <span>Official Listed Price:</span>
+          <strong id="off-display-listed">${formatIndianCurrency(defaultListedPrice)}</strong>
+          <input type="hidden" name="listed_price" id="off-input-listed" value="${defaultListedPrice}">
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <label>Final Agreed Price (₹) *
+          <input name="final_price" id="off-final-price" type="number" required value="${defaultListedPrice}">
+        </label>
+        <label>Advance Amount Received (₹) *
+          <input name="advance" id="off-advance" type="number" required value="${defaultAdvance}" placeholder="e.g. 100000">
+        </label>
+      </div>
+
+      <div class="crm-price-summary-box">
+        <div class="crm-calc-row highlight due">
+          <span>Remaining Balance Due:</span>
+          <strong id="off-calc-remaining">${formatIndianCurrency(Math.max(0, defaultListedPrice - defaultAdvance))}</strong>
+          <input type="hidden" name="remaining_amount" id="off-input-remaining" value="${Math.max(0, defaultListedPrice - defaultAdvance)}">
+        </div>
+      </div>
+
       <label>Booking Notes / Cheque / Transaction Details
         <textarea name="notes" rows="2" placeholder="Payment receipt no, branch walk-in, etc."></textarea>
       </label>
@@ -1629,13 +2179,51 @@ function offlineBookingModal(preselectedPropertyId = '') {
     </form>
   `);
 
+  const propSelect = document.getElementById('off-property-select');
+  const dispListed = document.getElementById('off-display-listed');
+  const inListed = document.getElementById('off-input-listed');
+  const inFinal = document.getElementById('off-final-price');
+  const inAdvance = document.getElementById('off-advance');
+  const dispRemain = document.getElementById('off-calc-remaining');
+  const inRemain = document.getElementById('off-input-remaining');
+
+  function updatePrices() {
+    const finalVal = parseFloat(inFinal.value) || 0;
+    const advVal = parseFloat(inAdvance.value) || 0;
+    const remaining = Math.max(0, finalVal - advVal);
+    dispRemain.textContent = formatIndianCurrency(remaining);
+    inRemain.value = remaining;
+  }
+
+  propSelect?.addEventListener('change', () => {
+    const opt = propSelect.selectedOptions[0];
+    const pPrice = parseFloat(opt?.dataset?.price) || defaultListedPrice;
+    dispListed.textContent = formatIndianCurrency(pPrice);
+    inListed.value = pPrice;
+    inFinal.value = pPrice;
+    updatePrices();
+  });
+
+  inFinal?.addEventListener('input', updatePrices);
+  inAdvance?.addEventListener('input', updatePrices);
+
   document.getElementById('offline-booking-form').onsubmit = async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target));
+    const finalPrice = parseFloat(data.final_price) || 0;
+    const advance = parseFloat(data.advance) || 0;
+    const remaining = Math.max(0, finalPrice - advance);
+
     try {
       await api('/api/crm/offline-booking', {
         method: 'POST',
-        body: JSON.stringify(data)
+        body: JSON.stringify({
+          ...data,
+          final_price: finalPrice,
+          advance: advance,
+          remaining_amount: remaining,
+          amount: advance
+        })
       });
       const p = S.inventory.find((x) => x.id === data.property_id);
       if (p) {
@@ -1658,7 +2246,6 @@ async function openPlotDrawer(p) {
   S.activePlotDetail = p;
   S.plotHistory = [];
 
-  // Fetch history asynchronously
   try {
     const h = await api(`/api/crm/inventory/${p.id}/history`);
     S.plotHistory = h.history || [];
@@ -1706,7 +2293,13 @@ async function patchBooking(id, status) {
       method: 'PATCH',
       body: JSON.stringify({ status })
     });
-    showToast(status === 'CONFIRMED' ? 'Booking confirmed & WhatsApp sent to customer!' : 'Booking status updated.');
+    showToast(
+      status === 'COMPLETED'
+        ? 'Booking marked COMPLETED and plot marked SOLD!'
+        : status === 'CANCELLED'
+        ? 'Booking cancelled and plot released back to AVAILABLE.'
+        : 'Booking status updated.'
+    );
     await load();
     render();
   } catch (x) {
@@ -1720,6 +2313,12 @@ function bindEnquiryActions() {
   });
   document.querySelectorAll('[data-enquiry-cancel]').forEach((x) => {
     x.onclick = () => cancelEnquiry(x.dataset.enquiryCancel);
+  });
+  document.querySelectorAll('[data-enquiry-restore]').forEach((x) => {
+    x.onclick = () => restoreEnquiry(x.dataset.enquiryRestore);
+  });
+  document.querySelectorAll('[data-enquiry-remove]').forEach((x) => {
+    x.onclick = () => archiveEnquiry(x.dataset.enquiryRemove);
   });
 }
 
@@ -1763,7 +2362,9 @@ function bindBookingActions() {
   });
   document.querySelectorAll('[data-booking-cancel]').forEach((x) => {
     x.onclick = async () => {
-      if (confirm('Cancel this booking and release inventory?')) await patchBooking(x.dataset.bookingCancel, 'CANCELLED');
+      if (confirm('Cancel this booking? This will immediately release the plot back to AVAILABLE on the public website.')) {
+        await patchBooking(x.dataset.bookingCancel, 'CANCELLED');
+      }
     };
   });
 }
@@ -1819,9 +2420,25 @@ function bindReviewActions() {
 }
 
 function bind() {
-  // Navigation tabs
-  document.querySelectorAll('[data-tab]').forEach((x) => {
+  // Mobile navigation hamburger toggle & backdrop
+  const menuToggle = document.getElementById('crm-menu-toggle');
+  const sidebar = document.getElementById('crm-sidebar');
+  const backdrop = document.getElementById('crm-sidebar-backdrop');
+
+  menuToggle?.addEventListener('click', () => {
+    sidebar?.classList.toggle('open');
+    backdrop?.classList.toggle('open');
+  });
+
+  backdrop?.addEventListener('click', () => {
+    sidebar?.classList.remove('open');
+    backdrop?.classList.remove('open');
+  });
+
+  document.querySelectorAll('.crm-nav').forEach((x) => {
     x.onclick = () => {
+      sidebar?.classList.remove('open');
+      backdrop?.classList.remove('open');
       S.tab = x.dataset.tab;
       render();
       if (S.tab === 'inbox' && S.active) messages(S.active).catch((e) => showToast(e.message, true));
@@ -1831,6 +2448,14 @@ function bind() {
   document.querySelectorAll('[data-go]').forEach((x) => {
     x.onclick = () => {
       S.tab = x.dataset.go;
+      render();
+    };
+  });
+
+  // Enquiry Filter (Active vs Cancelled)
+  document.querySelectorAll('[data-enquiry-filter]').forEach((btn) => {
+    btn.onclick = () => {
+      S.enquiryFilter = btn.dataset.enquiryFilter;
       render();
     };
   });
@@ -1856,19 +2481,26 @@ function bind() {
   const handleSearchInput = (e) => {
     S.search = e.target.value;
     const q = S.search.toLowerCase();
+
     if (S.tab === 'enquiries') {
       const tbody = document.getElementById('enquiries-table-body');
+      const cardsWrap = document.getElementById('enquiries-mobile-cards');
       const countEl = document.querySelector('.crm-card-head h2');
-      const filtered = S.enquiries.filter((enq) =>
+      const activeEnqs = S.enquiries.filter((enq) => enq.status !== 'CANCEL');
+      const cancelledEnqs = S.enquiries.filter((enq) => enq.status === 'CANCEL');
+      const targetList = S.enquiryFilter === 'cancelled' ? cancelledEnqs : activeEnqs;
+
+      const filtered = targetList.filter((enq) =>
         !q || [enq.name, enq.phone, enq.email, enq.project, enq.property, enq.notes, enq.status].some((v) => String(v || '').toLowerCase().includes(q))
       );
-      if (countEl) countEl.textContent = `${filtered.length} Website Enquiries`;
-      if (tbody) {
-        tbody.innerHTML = renderEnquiryRows(filtered);
-        bindEnquiryActions();
-      }
+
+      if (countEl) countEl.textContent = `${filtered.length} ${S.enquiryFilter === 'cancelled' ? 'Cancelled' : 'Active'} Website Enquiries`;
+      if (tbody) tbody.innerHTML = renderEnquiryRows(filtered);
+      if (cardsWrap) cardsWrap.innerHTML = renderEnquiryCards(filtered);
+      bindEnquiryActions();
     } else if (S.tab === 'visits') {
       const tbody = document.getElementById('visits-table-body');
+      const cardsWrap = document.getElementById('visits-mobile-cards');
       const countEl = document.querySelector('.crm-card-head h2');
       const filtered = S.visits.filter((v) => {
         if (S.visitFilter !== 'ALL') {
@@ -1887,12 +2519,12 @@ function bind() {
         return true;
       });
       if (countEl) countEl.textContent = `${filtered.length} Site Visits`;
-      if (tbody) {
-        tbody.innerHTML = renderVisitRows(filtered);
-        bindVisitActions();
-      }
+      if (tbody) tbody.innerHTML = renderVisitRows(filtered);
+      if (cardsWrap) cardsWrap.innerHTML = renderVisitCards(filtered);
+      bindVisitActions();
     } else if (S.tab === 'bookings') {
       const tbody = document.getElementById('bookings-table-body');
+      const cardsWrap = document.getElementById('bookings-mobile-cards');
       const countEl = document.querySelector('.crm-card-head h2');
       const filtered = S.bookings.filter((b) => {
         if (S.bookingFilter !== 'ALL' && b.status !== S.bookingFilter) return false;
@@ -1909,12 +2541,12 @@ function bind() {
         return true;
       });
       if (countEl) countEl.textContent = `${filtered.length} Confirmed Bookings`;
-      if (tbody) {
-        tbody.innerHTML = renderBookingRows(filtered);
-        bindBookingActions();
-      }
+      if (tbody) tbody.innerHTML = renderBookingRows(filtered);
+      if (cardsWrap) cardsWrap.innerHTML = renderBookingCards(filtered);
+      bindBookingActions();
     } else if (S.tab === 'reviews') {
       const tbody = document.getElementById('reviews-table-body');
+      const cardsWrap = document.getElementById('reviews-mobile-cards');
       const filtered = S.reviews.filter((r) => {
         if (S.reviewFilter !== 'ALL') {
           if (S.reviewFilter === 'SHOW' && !r.is_visible) return false;
@@ -1926,10 +2558,9 @@ function bind() {
         }
         return true;
       });
-      if (tbody) {
-        tbody.innerHTML = renderReviewRows(filtered);
-        bindReviewActions();
-      }
+      if (tbody) tbody.innerHTML = renderReviewRows(filtered);
+      if (cardsWrap) cardsWrap.innerHTML = renderReviewCards(filtered);
+      bindReviewActions();
     }
   };
 
@@ -1994,6 +2625,7 @@ function bind() {
           inventory_status: (x.dataset.status || 'AVAILABLE').toUpperCase(),
           area: 200,
           area_unit: 'Sq.Yds',
+          price: 3200000,
           projects: { name: 'VR Green Meadows', slug: 'vr-green-meadows' }
         };
       }
@@ -2015,6 +2647,7 @@ function bind() {
           title: `Villa ${villaId.toUpperCase()}`,
           inventory_status: (x.dataset.status || 'AVAILABLE').toUpperCase(),
           property_type: 'VILLA',
+          price: 18500000,
           projects: { name: 'VR Luxury Villas', slug: 'vr-luxury-villas' }
         };
       }
@@ -2036,6 +2669,29 @@ function bind() {
   });
   document.getElementById('crm-drawer-backdrop')?.addEventListener('click', (e) => {
     if (e.target.id === 'crm-drawer-backdrop') closePlotDrawer();
+  });
+
+  // Drawer Price Update
+  document.getElementById('drawer-save-price')?.addEventListener('click', async () => {
+    const priceInput = document.getElementById('drawer-edit-price');
+    const newPrice = parseFloat(priceInput?.value);
+    const prop = S.activePlotDetail;
+    if (!prop || isNaN(newPrice) || newPrice <= 0) {
+      showToast('Please enter a valid price amount.', true);
+      return;
+    }
+    try {
+      await api(`/api/crm/inventory/${prop.id}/price`, {
+        method: 'PATCH',
+        body: JSON.stringify({ price: newPrice })
+      });
+      showToast(`Listed price updated to ${formatIndianCurrency(newPrice)}! Website synced.`);
+      prop.price = newPrice;
+      await load();
+      render();
+    } catch (err) {
+      showToast(err.message, true);
+    }
   });
 
   // Plot drawer status transitions (Manual Owner Control)
