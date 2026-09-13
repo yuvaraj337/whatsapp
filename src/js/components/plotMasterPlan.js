@@ -879,11 +879,6 @@ export function initPlotMasterPlan(project) {
           <button type="button" class="villas-btn-back-project" onclick="window.closePlotEnquiry()" style="margin-top: 18px; width: 100%;">
             Back to Master Plan
           </button>
-
-          <!-- Bottom Artwork -->
-          <div class="villas-success-artwork-wrap">
-            <img src="/images/villas/success-illustration.png" alt="Your Dream Property is Just a Step Away!" class="villas-success-art-img" />
-          </div>
         </div>
       </div>
     `;

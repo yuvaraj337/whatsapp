@@ -215,14 +215,24 @@ export function initFindProperty() {
     const size = document.getElementById('find-size')?.value || '';
     const purpose = document.getElementById('find-purpose')?.value || '';
 
+    const queryParams = new URLSearchParams();
+    if (loc) queryParams.set('loc', loc);
+    if (budget) queryParams.set('budget', budget);
+    if (size) queryParams.set('size', size);
+    if (purpose) queryParams.set('purpose', purpose);
+
+    const qs = queryParams.toString() ? `?${queryParams.toString()}` : '';
+
     if (selectedType === 'openplots') {
-      window.location.hash = '#/open-plots';
+      window.location.hash = `#/open-plots${qs}`;
+    } else if (selectedType === 'villas') {
+      window.location.hash = `#/villas${qs}`;
+    } else if (selectedType === 'apartments') {
+      window.location.hash = `#/apartments${qs}`;
+    } else if (selectedType === 'farmlands') {
+      window.location.hash = `#/farmlands${qs}`;
     } else {
-      if (window.openSiteVisitModal) {
-        window.openSiteVisitModal(`Custom Match: ${selectedType} in ${loc || 'Anywhere'} (Budget: ${budget || 'Flexible'})`);
-      } else {
-        alert(`Searching properties for ${selectedType} in ${loc || 'AP & Telangana'}...`);
-      }
+      window.location.hash = `#/projects${qs}`;
     }
   };
 }

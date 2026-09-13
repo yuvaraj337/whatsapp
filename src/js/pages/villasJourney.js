@@ -10,6 +10,12 @@ import { renderMasterPlanSvgCode, initVillaMasterPlan } from '../components/vill
 /* ═══════════════════ APPLICATION STATE ═══════════════════ */
 let selectedFilter = 'all';
 let searchQuery = '';
+let selectedProjectFilter = '';
+let selectedTypeFilter = '';
+let selectedPriceFilter = '';
+let selectedBedroomsFilter = '';
+let selectedAvailabilityFilter = '';
+
 let activeCatIdx = 0;
 let activeSlideIdx = 1;
 let enquiryFormData = {
@@ -17,7 +23,7 @@ let enquiryFormData = {
   phone: '',
   email: '',
   date: '',
-  message: 'I am interested in Villa V08 at VR Green Villas.'
+  message: ''
 };
 let siteVisitFormData = {
   name: '',
@@ -171,16 +177,19 @@ const villaCategories = [
   { key: 'master-bedroom', name: 'Master Bedroom', image: '/images/villas/v08-sub-2.png', thumb: '/images/villas/v08-thumb-master-bedroom.png' },
   { key: 'children-bedroom', name: 'Children Bedroom', image: '/images/villas/v08-sub-3.png', thumb: '/images/villas/v08-thumb-children-bedroom.png' },
   { key: 'kitchen', name: 'Kitchen', image: '/images/villas/v08-sub-4.png', thumb: '/images/villas/v08-thumb-kitchen.png' },
-  { key: 'dining', name: 'Dining', image: '/images/villas/v08-main-clean.png', thumb: '/images/villas/v08-thumb-dining.png' },
+  { key: 'dining', name: 'Dining', image: '/images/journey/overview_thumb_3.jpg', thumb: '/images/villas/v08-thumb-dining.png' },
   { key: 'bathroom', name: 'Bathroom', image: '/images/villas/v08-sub-2.png', thumb: '/images/villas/v08-thumb-bathroom.png' },
-  { key: 'garden', name: 'Garden', image: '/images/villas/villa-vr-green.png', thumb: '/images/villas/v08-thumb-garden.png' }
+  { key: 'garden', name: 'Garden', image: '/images/villas/villa-vr-green.png', thumb: '/images/villas/v08-thumb-garden.png' },
+  { key: 'amenities', name: 'Clubhouse & Pool', image: '/images/journey/gallery_clubhouse.jpg', thumb: '/images/journey/gallery_clubhouse.jpg' }
 ];
 
 const subGalleryImages = [
+  '/images/villas/v08-main-clean.png',
   '/images/villas/v08-sub-1.png',
   '/images/villas/v08-sub-2.png',
   '/images/villas/v08-sub-3.png',
-  '/images/villas/v08-sub-4.png'
+  '/images/villas/v08-sub-4.png',
+  '/images/journey/gallery_clubhouse.jpg'
 ];
 
 /* ═══════════════════ ICONS ═══════════════════ */
@@ -319,6 +328,18 @@ function renderScreenListing() {
   const filtered = villasProjectsData.filter(v => {
     if (selectedFilter === '3bhk' && !v.bhk.includes('3')) return false;
     if (selectedFilter === '4bhk' && !v.bhk.includes('4')) return false;
+    if (selectedProjectFilter && v.id !== selectedProjectFilter) return false;
+    if (selectedTypeFilter === '3bhk' && !v.bhk.includes('3')) return false;
+    if (selectedTypeFilter === '4bhk' && !v.bhk.includes('4')) return false;
+    if (selectedBedroomsFilter && !v.specs?.bedrooms?.includes(selectedBedroomsFilter)) return false;
+    if (selectedAvailabilityFilter && v.status.toLowerCase() !== selectedAvailabilityFilter.toLowerCase()) return false;
+    if (selectedPriceFilter) {
+      const numMatch = v.price.match(/[\d.]+/);
+      const val = numMatch ? parseFloat(numMatch[0]) : 0;
+      if (selectedPriceFilter === 'under-2' && val >= 2.0) return false;
+      if (selectedPriceFilter === '2-2.5' && (val < 2.0 || val > 2.5)) return false;
+      if (selectedPriceFilter === 'above-2.5' && val < 2.5) return false;
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       return v.name.toLowerCase().includes(q) || v.location.toLowerCase().includes(q);
@@ -326,7 +347,7 @@ function renderScreenListing() {
     return true;
   });
 
-  const cardsHtml = filtered.map(v => `
+  const cardsHtml = filtered.length > 0 ? filtered.map(v => `
     <div class="villas-card" onclick="window._villaNav('/villas/${v.id}')" data-id="${v.id}">
       <div class="villas-card-img-wrap">
         <picture>
@@ -353,7 +374,12 @@ function renderScreenListing() {
         </div>
       </div>
     </div>
-  `).join('');
+  `).join('') : `
+    <div style="grid-column: 1 / -1; padding: 48px 24px; text-align: center; background: #f8fafc; border: 1.5px dashed #cbd5e1; border-radius: 12px;">
+      <p style="font-size: 1.1rem; color: #64748b; font-weight: 600; margin-bottom: 12px;">No villas match your selected filters.</p>
+      <button type="button" onclick="window._villasResetFilters()" style="background: #1A3B2B; color: #fff; padding: 8px 18px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;">Clear All Filters</button>
+    </div>
+  `;
 
   return `
     <div class="villas-listing-page">
@@ -377,39 +403,42 @@ function renderScreenListing() {
 
             <!-- Desktop Selects -->
             <select class="villas-filter-select" id="filter-projects">
-              <option value="">All Projects</option>
-              <option value="vr-green-villas">VR Green Villas</option>
-              <option value="sr-luxury-villas">SR Luxury Villas</option>
-              <option value="natures-nest-villas">Nature's Nest Villas</option>
-              <option value="elite-county-villas">Elite County Villas</option>
+              <option value="" ${!selectedProjectFilter ? 'selected' : ''}>All Projects</option>
+              <option value="vr-green-villas" ${selectedProjectFilter === 'vr-green-villas' ? 'selected' : ''}>VR Green Villas</option>
+              <option value="sr-luxury-villas" ${selectedProjectFilter === 'sr-luxury-villas' ? 'selected' : ''}>SR Luxury Villas</option>
+              <option value="natures-nest-villas" ${selectedProjectFilter === 'natures-nest-villas' ? 'selected' : ''}>Nature's Nest Villas</option>
+              <option value="elite-county-villas" ${selectedProjectFilter === 'elite-county-villas' ? 'selected' : ''}>Elite County Villas</option>
             </select>
 
             <select class="villas-filter-select" id="filter-types">
-              <option value="">All Villa Types</option>
-              <option value="3bhk">3 BHK Luxury</option>
-              <option value="4bhk">4 BHK Premium</option>
+              <option value="" ${!selectedTypeFilter ? 'selected' : ''}>All Villa Types</option>
+              <option value="3bhk" ${selectedTypeFilter === '3bhk' ? 'selected' : ''}>3 BHK Luxury</option>
+              <option value="4bhk" ${selectedTypeFilter === '4bhk' ? 'selected' : ''}>4 BHK Premium</option>
             </select>
 
             <select class="villas-filter-select" id="filter-price">
-              <option value="">Price Range</option>
-              <option value="under-2">Under ₹ 2.0 Cr</option>
-              <option value="2-2.5">₹ 2.0 - 2.5 Cr</option>
-              <option value="above-2.5">Above ₹ 2.5 Cr</option>
+              <option value="" ${!selectedPriceFilter ? 'selected' : ''}>Price Range</option>
+              <option value="under-2" ${selectedPriceFilter === 'under-2' ? 'selected' : ''}>Under ₹ 2.0 Cr</option>
+              <option value="2-2.5" ${selectedPriceFilter === '2-2.5' ? 'selected' : ''}>₹ 2.0 - 2.5 Cr</option>
+              <option value="above-2.5" ${selectedPriceFilter === 'above-2.5' ? 'selected' : ''}>Above ₹ 2.5 Cr</option>
             </select>
 
             <select class="villas-filter-select" id="filter-bedrooms">
-              <option value="">Bedrooms</option>
-              <option value="3">3 Bedrooms</option>
-              <option value="4">4 Bedrooms</option>
+              <option value="" ${!selectedBedroomsFilter ? 'selected' : ''}>Bedrooms</option>
+              <option value="3" ${selectedBedroomsFilter === '3' ? 'selected' : ''}>3 Bedrooms</option>
+              <option value="4" ${selectedBedroomsFilter === '4' ? 'selected' : ''}>4 Bedrooms</option>
             </select>
 
             <select class="villas-filter-select" id="filter-availability">
-              <option value="">Availability</option>
-              <option value="available">Available</option>
-              <option value="on-hold">On Hold</option>
+              <option value="" ${!selectedAvailabilityFilter ? 'selected' : ''}>Availability</option>
+              <option value="available" ${selectedAvailabilityFilter === 'available' ? 'selected' : ''}>Available</option>
+              <option value="on-hold" ${selectedAvailabilityFilter === 'on-hold' ? 'selected' : ''}>On Hold</option>
             </select>
 
-            <button type="button" class="villas-btn-apply" id="villas-apply-filters">Apply Filters</button>
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+              <button type="button" class="villas-btn-apply" id="villas-apply-filters" style="flex: 1;">Apply Filters</button>
+              <button type="button" class="villas-btn-reset" id="villas-reset-filters" style="padding: 10px 14px; background: #f1f5f9; border: 1.5px solid #cbd5e1; border-radius: 8px; color: #475569; font-weight: 600; cursor: pointer;">Clear</button>
+            </div>
           </aside>
 
           <!-- Listing Cards Column -->
@@ -1172,13 +1201,39 @@ function attachVillasEvents(screen) {
       });
     });
 
+    window._villasResetFilters = () => {
+      selectedFilter = 'all';
+      selectedProjectFilter = '';
+      selectedTypeFilter = '';
+      selectedPriceFilter = '';
+      selectedBedroomsFilter = '';
+      selectedAvailabilityFilter = '';
+      searchQuery = '';
+      const appEl = document.getElementById('app');
+      if (appEl) {
+        const p = renderVillasPage('/villas');
+        appEl.innerHTML = p.html;
+        if (p.init) p.init();
+      }
+    };
+
+    const resetBtn = document.getElementById('villas-reset-filters');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', window._villasResetFilters);
+    }
+
     const applyBtn = document.getElementById('villas-apply-filters');
     if (applyBtn) {
       applyBtn.addEventListener('click', () => {
-        const types = document.getElementById('filter-types');
-        if (types && types.value) {
-          selectedFilter = types.value;
+        selectedProjectFilter = document.getElementById('filter-projects')?.value || '';
+        selectedTypeFilter = document.getElementById('filter-types')?.value || '';
+        selectedPriceFilter = document.getElementById('filter-price')?.value || '';
+        selectedBedroomsFilter = document.getElementById('filter-bedrooms')?.value || '';
+        selectedAvailabilityFilter = document.getElementById('filter-availability')?.value || '';
+        if (selectedTypeFilter) {
+          selectedFilter = selectedTypeFilter;
         }
+
         const appEl = document.getElementById('app');
         if (appEl) {
           const p = renderVillasPage('/villas');

@@ -134,19 +134,19 @@ export const farmlandsData = [
 let activePhotoIdx = 1;
 
 let enquiryFormState = {
-  name: 'Siva Prasad',
-  phone: '98765 43210',
-  email: 'sivaprasad@gmail.com',
+  name: '',
+  phone: '',
+  email: '',
   interest: 'Green Valley Farms',
-  message: 'I would like to know more details about this farmland.'
+  message: ''
 };
 
 let siteVisitFormState = {
-  name: 'Siva Prasad',
-  phone: '98765 43210',
-  date: '12-09-2026',
+  name: '',
+  phone: '',
+  date: '',
   time: '10:00 AM - 12:00 PM',
-  message: 'I would like to visit this farmland.'
+  message: ''
 };
 
 /* ═══════════════════ NAVIGATION HELPER ═══════════════════ */

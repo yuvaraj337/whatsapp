@@ -48,7 +48,7 @@ export const featuredProjectsData = [
     spec3Icon: '🏊',
     price: '₹65 Lakhs*',
     image: '/images/ref/feat-apts-clean.jpg',
-    link: '#/vr-heights'
+    link: '#/apartments/vr-elite-towers'
   },
   {
     id: 'feat-farms',
@@ -65,7 +65,7 @@ export const featuredProjectsData = [
     spec3Icon: '📈',
     price: '₹18 Lakhs*',
     image: '/images/ref/feat-farm-clean.jpg',
-    link: '#/vr-agro-lands'
+    link: '#/farmlands/natures-nest'
   }
 ];
 

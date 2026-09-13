@@ -15,6 +15,8 @@ import {
   renderResourcesPage,
   renderMediaPage,
   renderCategoryListingPage,
+  renderLocationsPage,
+  renderProjectsPage,
   renderStaticPage
 } from './pages/staticPages.js';
 import './components/siteVisitModal.js';
@@ -33,9 +35,11 @@ const routes = {
   '/apartments': () => renderApartmentsPage('listing'),
   '/vr-elite-towers': () => renderApartmentsPage('overview'),
   '/vr-green-villas': () => renderVillasPage('/villas/vr-green-villas'),
-  '/vr-heights': () => renderProjectDetail('vr-heights'),
-  '/vr-agro-lands': () => renderProjectDetail('vr-agro-lands'),
+  '/vr-heights': () => renderApartmentsPage('overview'),
+  '/vr-agro-lands': () => renderFarmlandsPage('/farmlands/natures-nest'),
   '/about': renderAboutPage,
+  '/projects': renderProjectsPage,
+  '/locations': renderLocationsPage,
   '/services': renderServicesPage,
   '/resources': renderResourcesPage,
   '/media': renderMediaPage,

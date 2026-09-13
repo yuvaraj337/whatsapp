@@ -297,18 +297,18 @@ function renderScreenOverview() {
           </div>
         </div>
 
-        <!-- Hero Carousel & Thumbnails -->
+        <!-- Hero Carousel & Thumbnails (4 Apartment Angles) -->
         <div class="apt-ref-ov-hero-block">
           <div class="apt-ref-ov-main-img-wrap">
-            <img src="${p.image}" alt="${p.name}" class="apt-ref-ov-main-img" id="apt-ov-main-photo" />
-            <button type="button" class="apt-ref-ov-nav-btn prev" aria-label="Previous image">&lsaquo;</button>
-            <button type="button" class="apt-ref-ov-nav-btn next" aria-label="Next image">&rsaquo;</button>
+            <img src="/images/journey/overview_thumb_1.jpg" alt="${p.name} - Living Room Angle 1" class="apt-ref-ov-main-img" id="apt-ov-main-photo" />
+            <button type="button" class="apt-ref-ov-nav-btn prev" aria-label="Previous image" onclick="window._aptOvPrev()">&lsaquo;</button>
+            <button type="button" class="apt-ref-ov-nav-btn next" aria-label="Next image" onclick="window._aptOvNext()">&rsaquo;</button>
           </div>
           <div class="apt-ref-ov-thumbs-row">
-            <img src="/images/journey/overview_thumb_1.jpg" alt="Interior View 1" class="apt-ref-ov-thumb active" onclick="document.getElementById('apt-ov-main-photo').src=this.src; document.querySelectorAll('.apt-ref-ov-thumb').forEach(t=>t.classList.remove('active')); this.classList.add('active');" />
-            <img src="/images/journey/overview_thumb_2.jpg" alt="Interior View 2" class="apt-ref-ov-thumb" onclick="document.getElementById('apt-ov-main-photo').src=this.src; document.querySelectorAll('.apt-ref-ov-thumb').forEach(t=>t.classList.remove('active')); this.classList.add('active');" />
-            <img src="/images/journey/overview_thumb_3.jpg" alt="Interior View 3" class="apt-ref-ov-thumb" onclick="document.getElementById('apt-ov-main-photo').src=this.src; document.querySelectorAll('.apt-ref-ov-thumb').forEach(t=>t.classList.remove('active')); this.classList.add('active');" />
-            <img src="/images/journey/overview_thumb_4.jpg" alt="Interior View 4" class="apt-ref-ov-thumb" onclick="document.getElementById('apt-ov-main-photo').src=this.src; document.querySelectorAll('.apt-ref-ov-thumb').forEach(t=>t.classList.remove('active')); this.classList.add('active');" />
+            <img src="/images/journey/overview_thumb_1.jpg" alt="Living Room Angle 1" class="apt-ref-ov-thumb active" onclick="window._aptOvSetIndex(0)" />
+            <img src="/images/journey/overview_thumb_2.jpg" alt="Master Bedroom Angle 2" class="apt-ref-ov-thumb" onclick="window._aptOvSetIndex(1)" />
+            <img src="/images/journey/overview_thumb_3.jpg" alt="Gourmet Kitchen & Dining Angle 3" class="apt-ref-ov-thumb" onclick="window._aptOvSetIndex(2)" />
+            <img src="/images/journey/overview_thumb_4.jpg" alt="Media Lounge Angle 4" class="apt-ref-ov-thumb" onclick="window._aptOvSetIndex(3)" />
           </div>
         </div>
 
@@ -796,6 +796,30 @@ function renderScreenSiteVisitSuccess() {
 
 /* ═══════════════════ GLOBAL EVENT HANDLERS ═══════════════════ */
 function attachEvents(screen) {
+  // Apartment Overview Carousel Controls
+  const ovImages = [
+    '/images/journey/overview_thumb_1.jpg',
+    '/images/journey/overview_thumb_2.jpg',
+    '/images/journey/overview_thumb_3.jpg',
+    '/images/journey/overview_thumb_4.jpg'
+  ];
+  let ovCurrentIdx = 0;
+  window._aptOvSetIndex = (idx) => {
+    ovCurrentIdx = (idx + ovImages.length) % ovImages.length;
+    const photo = document.getElementById('apt-ov-main-photo');
+    if (photo) photo.src = ovImages[ovCurrentIdx];
+    const thumbs = document.querySelectorAll('.apt-ref-ov-thumb');
+    thumbs.forEach((t, i) => {
+      t.classList.toggle('active', i === ovCurrentIdx);
+    });
+  };
+  window._aptOvPrev = () => {
+    window._aptOvSetIndex(ovCurrentIdx - 1);
+  };
+  window._aptOvNext = () => {
+    window._aptOvSetIndex(ovCurrentIdx + 1);
+  };
+
   // Navigation helper
   window._aptNav = (routePath) => {
     window.location.hash = '#' + routePath;
