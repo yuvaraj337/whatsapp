@@ -235,47 +235,35 @@ function stat(t, v, m, i) {
 function overview() {
   const s = S.summary || {};
   const i = s.inventory || {};
+  const totalEnquiriesCount = s.totalEnquiries || S.enquiries.length;
+  const newEnquiriesCount = s.newEnquiries || S.enquiries.filter((e) => (e.status || 'PENDING') === 'PENDING').length;
+  const pendingVisitsCount = s.siteVisitRequests || S.visits.filter((v) => v.status === 'REQUESTED').length;
+  const confirmedVisitsCount = s.confirmedVisits || S.visits.filter((v) => v.status === 'CONFIRMED').length;
+  const confirmedBookingsCount = s.totalBookings || s.bookings || S.bookings.filter((b) => b.status === 'CONFIRMED').length;
+
   return `
     <div class="crm-stats">
-      ${stat('Total Enquiries / Leads', s.totalLeads || 0, `${s.newLeads || 0} new`, '✉')}
-      ${stat('Open WhatsApp', s.openConversations || 0, 'needs attention', '◌')}
-      ${stat('Visit Requests', s.siteVisitRequests || 0, `${s.confirmedVisits || 0} confirmed`, '⌖')}
-      ${stat('Qualified Leads', s.qualifiedLeads || 0, 'sales-ready', '★')}
+      ${stat('Website Enquiries', totalEnquiriesCount, `${newEnquiriesCount} pending review`, '✉')}
+      ${stat('Pending Site Visits', pendingVisitsCount, 'awaiting confirmation', '⌖')}
+      ${stat('Confirmed Visits', confirmedVisitsCount, 'scheduled with customers', '✓')}
+      ${stat('Confirmed Bookings', confirmedBookingsCount, 'units booked', '★')}
     </div>
     <div class="crm-overview-grid">
       <section class="crm-card">
         <div class="crm-card-head">
           <div>
-            <h2>Lead Pipeline</h2>
-            <p>Current sales stages</p>
-          </div>
-          <button class="crm-link" data-go="leads">View all →</button>
-        </div>
-        <div class="crm-pipeline">
-          ${LEAD_STATUSES.map((x) => {
-            const n = S.leads.filter((l) => (l.status || 'new') === x).length;
-            return `
-              <div>
-                <span>${label(x)}</span>
-                <strong>${n}</strong>
-                <div class="crm-bar">
-                  <i style="width:${Math.min(100, (n / Math.max(1, S.leads.length)) * 100)}%"></i>
-                </div>
-              </div>
-            `;
-          }).join('')}
-        </div>
-      </section>
-      <section class="crm-card">
-        <div class="crm-card-head">
-          <div>
-            <h2>Inventory Status</h2>
-            <p>Database source of truth</p>
+            <h2>Inventory Availability</h2>
+            <p>Database source of truth across ventures</p>
           </div>
           <button class="crm-link" data-go="inventory">Manage Master Plan →</button>
         </div>
         <div class="crm-inventory-summary">
-          ${[['available', i.available || 0], ['hold', (i.hold || 0) + (i.reserved || 0)], ['booked', i.booked || 0], ['sold', i.sold || 0]].map((x) => `
+          ${[
+            ['available', i.available || 0],
+            ['hold', (i.hold || 0) + (i.reserved || 0)],
+            ['booked', i.booked || 0],
+            ['sold', i.sold || 0]
+          ].map((x) => `
             <div>
               <strong>${x[1]}</strong>
               <span>${label(x[0])}</span>
@@ -283,64 +271,35 @@ function overview() {
           `).join('')}
         </div>
       </section>
-    </div>
-    <section class="crm-card">
-      <div class="crm-card-head">
-        <div>
-          <h2>Recent Enquiries</h2>
-          <p>Latest customer interest with project context</p>
+      <section class="crm-card">
+        <div class="crm-card-head">
+          <div>
+            <h2>Operational Overview</h2>
+            <p>Live integrations &amp; operational metrics</p>
+          </div>
+          <button class="crm-link" data-go="inbox">Open Inbox →</button>
         </div>
-        <button class="crm-link" data-go="enquiries">View all →</button>
-      </div>
-      <div class="crm-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Customer</th>
-              <th>Phone</th>
-              <th>Project &amp; Property</th>
-              <th>Source</th>
-              <th>Status</th>
-              <th>Updated</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${S.leads.slice(0, 8).map((l) => `
-              <tr data-open-lead="${l.id}">
-                <td>
-                  <div class="crm-person">
-                    <span>${initials(l.name)}</span>
-                    <div>
-                      <b>${esc(l.name || 'Unknown')}</b>
-                      <small>${esc(l.email || 'No email')}</small>
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <a href="https://wa.me/${String(l.phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" style="color: #128C7E; font-weight: 700; text-decoration: none;">
-                    ${esc(l.phone || '—')}
-                  </a>
-                </td>
-                <td>
-                  <b>${esc(l.project || 'General')}</b>
-                  <small class="crm-cell-sub">${esc(l.property && l.property !== '—' ? 'Plot ' + l.property : '')}</small>
-                </td>
-                <td><span class="crm-badge">${esc(l.source || 'website')}</span></td>
-                <td><span class="crm-badge ${cls(l.status || 'new')}">${label(l.status || 'new')}</span></td>
-                <td>${date(l.updated_at)}</td>
-              </tr>
-            `).join('') || `<tr><td colspan="6"><div class="crm-empty">No leads yet.</div></td></tr>`}
-          </tbody>
-        </table>
-      </div>
-    </section>
+        <div style="padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px;">
+            <span style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">WhatsApp Active</span>
+            <div style="font-size: 24px; font-weight: 700; color: #0f172a; margin-top: 4px;">${s.openConversations || 0}</div>
+            <small style="color: #10b981; font-weight: 500;">Connected via Cloud API</small>
+          </div>
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px;">
+            <span style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase;">Reviews Pending</span>
+            <div style="font-size: 24px; font-weight: 700; color: #0f172a; margin-top: 4px;">${s.pendingReviews || 0}</div>
+            <small style="color: #f59e0b; font-weight: 500;">Awaiting approval</small>
+          </div>
+        </div>
+      </section>
+    </div>
   `;
 }
 
 function enquiries() {
   const q = S.search.toLowerCase();
-  const rows = S.leads.filter((l) => {
-    if (q && ![l.name, l.phone, l.email, l.project, l.property, l.source, l.notes].some((v) => String(v || '').toLowerCase().includes(q))) return false;
+  const rows = S.enquiries.filter((e) => {
+    if (q && ![e.name, e.phone, e.email, e.project, e.property, e.notes, e.status].some((v) => String(v || '').toLowerCase().includes(q))) return false;
     return true;
   });
 
@@ -350,13 +309,12 @@ function enquiries() {
         <span>⌕</span>
         <input id="enquiry-search" value="${esc(S.search)}" placeholder="Search customer, phone, property or enquiry message…">
       </div>
-      <button class="crm-primary" id="add-lead">+ Add Enquiry</button>
     </div>
     <section class="crm-card">
       <div class="crm-card-head">
         <div>
-          <h2>${rows.length} Enquiries</h2>
-          <p>Submissions from website forms, brochure downloads, and property showcase modals.</p>
+          <h2>${rows.length} Website Enquiries</h2>
+          <p>Website enquiry submissions only. Owner decision: Book plot or Cancel enquiry.</p>
         </div>
       </div>
       <div class="crm-table-wrap">
@@ -365,11 +323,10 @@ function enquiries() {
             <tr>
               <th>Customer</th>
               <th>Phone</th>
-              <th>Project &amp; Property</th>
-              <th>Source</th>
-              <th>Enquiry Message / Notes</th>
+              <th>Email</th>
+              <th>Project / Property</th>
+              <th>Notes</th>
               <th>Status</th>
-              <th>Date</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -384,129 +341,45 @@ function enquiries() {
 
 function renderEnquiryRows(rows) {
   if (!rows.length) {
-    return `<tr><td colspan="8"><div class="crm-empty">No enquiries match your search.</div></td></tr>`;
+    return `<tr><td colspan="7"><div class="crm-empty">No website enquiries match your search.</div></td></tr>`;
   }
-  return rows.map((l) => `
+  return rows.map((e) => `
     <tr>
       <td>
         <div class="crm-person">
-          <span>${initials(l.name)}</span>
+          <span>${initials(e.name)}</span>
           <div>
-            <b>${esc(l.name || 'Unknown')}</b>
-            <small>${esc(l.email || 'No email')}</small>
+            <b>${esc(e.name || 'Unknown')}</b>
           </div>
         </div>
       </td>
       <td>
-        <a href="https://wa.me/${String(l.phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" style="color: #128C7E; font-weight: 700; text-decoration: none;">
-          ${esc(l.phone || '—')}
+        <a href="https://wa.me/${String(e.phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" style="color: #128C7E; font-weight: 700; text-decoration: none;">
+          ${esc(e.phone || '—')} 💬
         </a>
       </td>
+      <td>${esc(e.email || '—')}</td>
       <td>
-        <b>${esc(l.project || 'General')}</b>
-        <small class="crm-cell-sub">${esc(l.property && l.property !== '—' ? 'Plot ' + l.property : '')}</small>
+        <b>${esc(e.project || 'VR Green Meadows')}</b>
+        <small class="crm-cell-sub">${esc(e.property && e.property !== '—' ? 'Plot ' + e.property : 'General Enquiry')}</small>
       </td>
-      <td><span class="crm-badge">${esc(l.source || 'Website Form')}</span></td>
-      <td style="max-width: 260px; white-space: normal; line-height: 1.45;">
-        ${esc(l.notes || 'General enquiry')}
+      <td style="max-width: 280px; white-space: normal; line-height: 1.45;">
+        ${esc(e.notes || '-')}
       </td>
       <td>
-        <select class="crm-inline-select ${cls(l.status || 'new')}" data-lead-status="${l.id}">
-          ${LEAD_STATUSES.map((x) => `<option value="${x}" ${(l.status || 'new') === x ? 'selected' : ''}>${label(x)}</option>`).join('')}
-        </select>
+        <span class="crm-badge ${e.status === 'BOOKED' ? 'status-booked' : e.status === 'CANCEL' ? 'status-cancelled' : 'status-hold'}">
+          ${e.status === 'BOOKED' ? 'BOOKED' : e.status === 'CANCEL' ? 'CANCEL' : 'PENDING'}
+        </span>
       </td>
-      <td>${date(l.created_at)}</td>
       <td>
         <div style="display: flex; gap: 6px;">
-          <button class="crm-small-btn" data-convert-visit="${l.id}" title="Book Site Visit for this lead">📅 Visit</button>
-          <button class="crm-small-btn" data-open-lead="${l.id}">Edit</button>
+          ${e.status === 'BOOKED' ? `
+            <span style="font-size: 11px; color: #16a34a; font-weight: 700;">✓ Confirmed</span>
+          ` : `
+            <button class="crm-action success" data-enquiry-book="${e.id}" title="Book Plot &amp; Update Website">✓ Book</button>
+            <button class="crm-action danger" data-enquiry-cancel="${e.id}" title="Cancel Enquiry">✕ Cancel</button>
+          `}
         </div>
-      </td>
-    </tr>
-  `).join('');
-}
-
-function leads() {
-  const q = S.search.toLowerCase();
-  const rows = S.leads.filter((l) =>
-    (S.leadFilter === 'all' || (l.status || 'new') === S.leadFilter) &&
-    (!q || [l.name, l.phone, l.email, l.project, l.property, l.source, l.notes].some((v) => String(v || '').toLowerCase().includes(q)))
-  );
-
-  return `
-    <div class="crm-toolbar">
-      <div class="crm-search">
-        <span>⌕</span>
-        <input id="lead-search" value="${esc(S.search)}" placeholder="Search name, phone, project or email…">
-      </div>
-      <select id="lead-filter">
-        <option value="all">All stages</option>
-        ${LEAD_STATUSES.map((x) => `<option value="${x}" ${S.leadFilter === x ? 'selected' : ''}>${label(x)}</option>`).join('')}
-      </select>
-      <button class="crm-primary" id="add-lead">+ Add lead</button>
-    </div>
-    <section class="crm-card">
-      <div class="crm-card-head">
-        <div>
-          <h2>${rows.length} leads</h2>
-          <p>Every lead clearly displays associated project and property context.</p>
-        </div>
-      </div>
-      <div class="crm-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Lead</th>
-              <th>Phone</th>
-              <th>Project &amp; Property</th>
-              <th>Source</th>
-              <th>Status</th>
-              <th>Created</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="leads-table-body">
-            ${renderLeadRows(rows)}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  `;
-}
-
-function renderLeadRows(rows) {
-  if (!rows.length) {
-    return `<tr><td colspan="7"><div class="crm-empty">No leads match this filter.</div></td></tr>`;
-  }
-  return rows.map((l) => `
-    <tr>
-      <td>
-        <div class="crm-person">
-          <span>${initials(l.name)}</span>
-          <div>
-            <b>${esc(l.name || 'Unknown')}</b>
-            <small>${esc(l.email || 'No email')}</small>
-          </div>
-        </div>
-      </td>
-      <td>
-        <a href="https://wa.me/${String(l.phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" style="color: #128C7E; font-weight: 700; text-decoration: none;">
-          ${esc(l.phone || '—')}
-        </a>
-      </td>
-      <td>
-        <b>${esc(l.project || 'Real Estate Brothers group')}</b>
-        <small class="crm-cell-sub">${esc(l.property && l.property !== '—' ? 'Plot ' + l.property : '')}</small>
-      </td>
-      <td><span class="crm-badge">${esc(l.source || 'website')}</span></td>
-      <td>
-        <select class="crm-inline-select ${cls(l.status || 'new')}" data-lead-status="${l.id}">
-          ${LEAD_STATUSES.map((x) => `<option value="${x}" ${(l.status || 'new') === x ? 'selected' : ''}>${label(x)}</option>`).join('')}
-        </select>
-      </td>
-      <td>${date(l.created_at)}</td>
-      <td>
-        <button class="crm-small-btn" data-open-lead="${l.id}">Open</button>
       </td>
     </tr>
   `).join('');
@@ -600,29 +473,46 @@ function inbox() {
 }
 
 function visits() {
+  const q = S.search.toLowerCase();
   const rows = S.visits.filter((v) => {
-    if (S.visitFilter === 'ALL') return true;
-    if (S.visitFilter === 'PENDING' && (v.status === 'REQUESTED' || v.status === 'PENDING')) return true;
-    return v.status === S.visitFilter;
+    if (S.visitFilter !== 'ALL') {
+      if (S.visitFilter === 'PENDING' && v.status !== 'REQUESTED' && v.status !== 'PENDING') return false;
+      if (S.visitFilter !== 'PENDING' && v.status !== S.visitFilter) return false;
+    }
+    if (q) {
+      const cust = v.leads?.name || '';
+      const phone = v.leads?.phone || '';
+      const email = v.leads?.email || '';
+      const proj = v.properties?.projects?.name || v.properties?.title || '';
+      const code = v.properties?.property_code || '';
+      const notes = v.notes || '';
+      if (![cust, phone, email, proj, code, notes].some((val) => val.toLowerCase().includes(q))) return false;
+    }
+    return true;
   });
 
   return `
     <div class="crm-toolbar">
+      <div class="crm-search">
+        <span>⌕</span>
+        <input id="visit-search" value="${esc(S.search)}" placeholder="Search visitor name, phone, plot, or notes…">
+      </div>
       <select id="visit-filter">
         <option value="ALL">All visit statuses</option>
         <option value="PENDING" ${S.visitFilter === 'PENDING' ? 'selected' : ''}>Pending Review</option>
         <option value="CONFIRMED" ${S.visitFilter === 'CONFIRMED' ? 'selected' : ''}>Confirmed</option>
         <option value="RESCHEDULED" ${S.visitFilter === 'RESCHEDULED' ? 'selected' : ''}>Rescheduled</option>
         <option value="COMPLETED" ${S.visitFilter === 'COMPLETED' ? 'selected' : ''}>Completed</option>
-        <option value="CANCELLED" ${S.visitFilter === 'CANCELLED' ? 'selected' : ''}>Cancelled / Rejected</option>
+        <option value="CANCELLED" ${S.visitFilter === 'CANCELLED' ? 'selected' : ''}>Cancelled</option>
+        <option value="BOOKED" ${S.visitFilter === 'BOOKED' ? 'selected' : ''}>Booked</option>
       </select>
-      <button class="crm-primary" id="add-visit">+ Site visit request</button>
+      <button class="crm-primary" id="add-visit">+ Add Site Visit</button>
     </div>
     <section class="crm-card">
       <div class="crm-card-head">
         <div>
-          <h2>Site Visits</h2>
-          <p>Customer site visits are requests. Confirming a visit dispatches WhatsApp notification and does NOT alter plot status.</p>
+          <h2>${rows.length} Site Visits</h2>
+          <p>Site visit appointments only (plot remains Available). When customer decides to purchase, convert to BOOKED to confirm booking.</p>
         </div>
       </div>
       <div class="crm-table-wrap">
@@ -630,68 +520,94 @@ function visits() {
           <thead>
             <tr>
               <th>Customer</th>
-              <th>Property</th>
-              <th>Source</th>
-              <th>Requested</th>
-              <th>Scheduled</th>
-              <th>Status</th>
+              <th>Phone</th>
+              <th>Email</th>
+              <th>Project</th>
+              <th>Plot / Property</th>
+              <th>Date</th>
+              <th>Time</th>
               <th>Notes</th>
-              <th>Action</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
-          <tbody>
-            ${rows.map((v) => {
-              const src = v.source || (v.notes && v.notes.includes('WhatsApp') ? 'WhatsApp AI' : 'Website');
-              const displayStatus = v.status === 'REQUESTED' ? 'PENDING' : v.status;
-              const statusClass = displayStatus === 'PENDING' ? 'status-hold' : cls(v.status);
-
-              return `
-                <tr>
-                  <td>
-                    <div class="crm-person">
-                      <span>${initials(v.leads?.name)}</span>
-                      <div>
-                        <b>${esc(v.leads?.name || 'Unknown')}</b>
-                        <small>
-                          <a href="https://wa.me/${String(v.leads?.phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" style="color: #128C7E; font-weight: 600; text-decoration: none;">
-                            ${esc(v.leads?.phone || '—')} 💬
-                          </a>
-                        </small>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    <b>${esc(v.properties?.title || v.properties?.property_code || '—')}</b>
-                    <small class="crm-cell-sub">${esc(v.properties?.projects?.name || '')}</small>
-                  </td>
-                  <td>
-                    <span class="crm-badge" style="${src === 'WhatsApp AI' ? 'background:#dcfce7; color:#15803d;' : 'background:#e0f2fe; color:#0369a1;'}">
-                      ${esc(src)}
-                    </span>
-                  </td>
-                  <td>${date(v.requested_at)}</td>
-                  <td><b>${date(v.scheduled_at)}</b></td>
-                  <td><span class="crm-badge ${statusClass}">${displayStatus}</span></td>
-                  <td style="max-width: 220px; white-space: normal; font-size: 12px; line-height: 1.4;">${esc(v.notes || '—')}</td>
-                  <td>
-                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                      ${v.status === 'REQUESTED' || v.status === 'RESCHEDULED' ? `
-                        <button class="crm-action success" data-confirm-visit="${v.id}" title="Confirm site visit & send WhatsApp to customer">Confirm</button>
-                        <button class="crm-action danger" data-cancel-visit="${v.id}" title="Reject site visit">Reject</button>
-                      ` : v.status === 'CONFIRMED' ? `
-                        <button class="crm-action" data-complete-visit="${v.id}">Complete</button>
-                        <button class="crm-action" data-reschedule-visit="${v.id}">Reschedule</button>
-                      ` : '—'}
-                    </div>
-                  </td>
-                </tr>
-              `;
-            }).join('') || `<tr><td colspan="8"><div class="crm-empty">No site visits.</div></td></tr>`}
+          <tbody id="visits-table-body">
+            ${renderVisitRows(rows)}
           </tbody>
         </table>
       </div>
     </section>
   `;
+}
+
+function renderVisitRows(rows) {
+  if (!rows.length) {
+    return `<tr><td colspan="11"><div class="crm-empty">No site visits match this filter.</div></td></tr>`;
+  }
+  return rows.map((v) => {
+    const src = v.source || (v.notes && v.notes.includes('WhatsApp') ? 'WhatsApp AI' : (v.notes && v.notes.includes('Offline') ? 'Offline' : 'Website'));
+    const displayStatus = v.status === 'REQUESTED' ? 'PENDING' : v.status;
+    const statusClass = displayStatus === 'PENDING' ? 'status-hold' : cls(v.status);
+
+    let visitDate = '—';
+    let visitTime = 'Anytime';
+    if (v.scheduled_at) {
+      const d = new Date(v.scheduled_at);
+      if (!Number.isNaN(d.getTime())) {
+        visitDate = d.toLocaleDateString('en-IN', { dateStyle: 'medium' });
+        visitTime = d.toLocaleTimeString('en-IN', { timeStyle: 'short' });
+      }
+    }
+
+    return `
+      <tr>
+        <td>
+          <div class="crm-person">
+            <span>${initials(v.leads?.name)}</span>
+            <div>
+              <b>${esc(v.leads?.name || 'Unknown')}</b>
+            </div>
+          </div>
+        </td>
+        <td>
+          <a href="https://wa.me/${String(v.leads?.phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" style="color: #128C7E; font-weight: 700; text-decoration: none;">
+            ${esc(v.leads?.phone || '—')} 💬
+          </a>
+        </td>
+        <td>${esc(v.leads?.email || '—')}</td>
+        <td><b>${esc(v.properties?.projects?.name || 'VR Green Meadows')}</b></td>
+        <td>
+          <b>${esc(v.properties?.property_code ? 'Plot ' + v.properties.property_code : (v.properties?.title || '—'))}</b>
+        </td>
+        <td>${esc(visitDate)}</td>
+        <td><b>${esc(visitTime)}</b></td>
+        <td style="max-width: 200px; white-space: normal; font-size: 12px; line-height: 1.4;">${esc(v.notes || '—')}</td>
+        <td>
+          <span class="crm-badge" style="${src === 'WhatsApp AI' ? 'background:#dcfce7; color:#15803d;' : src === 'Offline' ? 'background:#fef3c7; color:#92400e;' : 'background:#e0f2fe; color:#0369a1;'}">
+            ${esc(src)}
+          </span>
+        </td>
+        <td><span class="crm-badge ${statusClass}">${displayStatus}</span></td>
+        <td>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            ${v.status === 'REQUESTED' || v.status === 'PENDING' || v.status === 'RESCHEDULED' ? `
+              <button class="crm-action success" data-confirm-visit="${v.id}" title="Confirm site visit &amp; send WhatsApp to customer">✓ Confirm</button>
+              <button class="crm-action" data-visit-book="${v.id}" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;" title="Customer booked this plot">★ Book</button>
+              <button class="crm-action danger" data-cancel-visit="${v.id}" title="Cancel site visit">✕ Cancel</button>
+            ` : v.status === 'CONFIRMED' ? `
+              <button class="crm-action" data-visit-book="${v.id}" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;" title="Customer booked this plot">★ Book</button>
+              <button class="crm-action" data-complete-visit="${v.id}">Complete</button>
+              <button class="crm-action" data-reschedule-visit="${v.id}">Reschedule</button>
+              <button class="crm-action danger" data-cancel-visit="${v.id}">Cancel</button>
+            ` : v.status === 'BOOKED' ? `
+              <span style="font-size: 11px; color: #16a34a; font-weight: 700;">✓ Booked</span>
+            ` : '—'}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 function inventory() {
@@ -748,7 +664,7 @@ function renderMasterPlanView(proj) {
   let overrides = {};
   try {
     overrides = JSON.parse(localStorage.getItem('vr_plot_status_overrides') || '{}');
-  } catch (e) {}
+  } catch (e) { }
 
   if (proj.slug === 'vr-green-meadows') {
     const plots = GREEN_MEADOWS_PLOTS.map((base) => {
@@ -838,8 +754,8 @@ function renderInventoryTableView(rows) {
         </thead>
         <tbody>
           ${rows.map((p) => {
-            const b = p.active_booking;
-            return `
+    const b = p.active_booking;
+    return `
               <tr>
                 <td>
                   <b>${esc(p.property_code)}</b>
@@ -865,7 +781,7 @@ function renderInventoryTableView(rows) {
                 </td>
               </tr>
             `;
-          }).join('') || `<tr><td colspan="7"><div class="crm-empty">No inventory found.</div></td></tr>`}
+  }).join('') || `<tr><td colspan="7"><div class="crm-empty">No inventory found.</div></td></tr>`}
         </tbody>
       </table>
     </div>
@@ -1010,19 +926,41 @@ function renderPlotDrawerHtml() {
 }
 
 function bookings() {
-  const rows = S.bookings.filter((b) => S.bookingFilter === 'ALL' || b.status === S.bookingFilter);
+  const q = S.search.toLowerCase();
+  const rows = S.bookings.filter((b) => {
+    if (S.bookingFilter !== 'ALL' && b.status !== S.bookingFilter) return false;
+    if (q) {
+      const cust = b.leads?.name || '';
+      const phone = b.leads?.phone || '';
+      const email = b.leads?.email || '';
+      const code = b.properties?.property_code || '';
+      const proj = b.properties?.projects?.name || '';
+      const ref = b.booking_reference || '';
+      const notes = b.notes || '';
+      if (![cust, phone, email, code, proj, ref, notes].some((val) => val.toLowerCase().includes(q))) return false;
+    }
+    return true;
+  });
+
   return `
     <div class="crm-toolbar">
+      <div class="crm-search">
+        <span>⌕</span>
+        <input id="booking-search" value="${esc(S.search)}" placeholder="Search booking reference, customer, phone, plot…">
+      </div>
       <select id="booking-filter">
-        <option value="ALL">All bookings</option>
-        ${BOOKING_STATUSES.map((x) => `<option value="${x}" ${S.bookingFilter === x ? 'selected' : ''}>${label(x)}</option>`).join('')}
+        <option value="ALL">All confirmed bookings</option>
+        <option value="CONFIRMED" ${S.bookingFilter === 'CONFIRMED' ? 'selected' : ''}>Confirmed</option>
+        <option value="COMPLETED" ${S.bookingFilter === 'COMPLETED' ? 'selected' : ''}>Completed</option>
+        <option value="CANCELLED" ${S.bookingFilter === 'CANCELLED' ? 'selected' : ''}>Cancelled</option>
       </select>
+      <button class="crm-primary" id="add-booking">+ Add Booking</button>
     </div>
     <section class="crm-card">
       <div class="crm-card-head">
         <div>
-          <h2>Bookings &amp; Reservations</h2>
-          <p>Confirmed customer plot bookings and payment records.</p>
+          <h2>${rows.length} Confirmed Bookings</h2>
+          <p>Central record of confirmed property bookings. Plot inventory is synchronized immediately.</p>
         </div>
       </div>
       <div class="crm-table-wrap">
@@ -1030,45 +968,75 @@ function bookings() {
           <thead>
             <tr>
               <th>Customer</th>
-              <th>Property</th>
-              <th>Reference</th>
+              <th>Phone</th>
+              <th>Email</th>
+              <th>Project</th>
+              <th>Plot / Property</th>
+              <th>Booking Date</th>
+              <th>Source</th>
               <th>Status</th>
-              <th>Amount</th>
-              <th>Action</th>
+              <th>Notes</th>
+              <th>Actions</th>
             </tr>
           </thead>
-          <tbody>
-            ${rows.map((b) => `
-              <tr>
-                <td>
-                  <div class="crm-person">
-                    <span>${initials(b.leads?.name)}</span>
-                    <div>
-                      <b>${esc(b.leads?.name || 'Unknown')}</b>
-                      <small>${esc(b.leads?.phone || '')}</small>
-                    </div>
-                  </div>
-                </td>
-                <td>${esc(b.properties?.property_code || '—')}</td>
-                <td>${esc(b.booking_reference || '—')}</td>
-                <td><span class="crm-badge ${cls(b.status)}">${label(b.status)}</span></td>
-                <td>${b.amount ? `${esc(b.currency || 'INR')} ${esc(b.amount)}` : '—'}</td>
-                <td>
-                  ${b.status === 'PENDING' ? `
-                    <button class="crm-action success" data-booking-confirm="${b.id}">Confirm</button>
-                    <button class="crm-action danger" data-booking-cancel="${b.id}">Cancel</button>
-                  ` : b.status === 'CONFIRMED' ? `
-                    <button class="crm-action" data-booking-complete="${b.id}">Complete</button>
-                    <button class="crm-action danger" data-booking-cancel="${b.id}">Cancel</button>
-                  ` : '—'}
-                </td>
-              </tr>
-            `).join('') || `<tr><td colspan="6"><div class="crm-empty">No bookings.</div></td></tr>`}
+          <tbody id="bookings-table-body">
+            ${renderBookingRows(rows)}
           </tbody>
         </table>
       </div>
     </section>
   `;
+}
+
+function renderBookingRows(rows) {
+  if (!rows.length) {
+    return `<tr><td colspan="10"><div class="crm-empty">No confirmed bookings found.</div></td></tr>`;
+  }
+  return rows.map((b) => {
+    const src = b.leads?.source || (b.notes && b.notes.includes('Offline') ? 'Offline' : (b.notes && b.notes.includes('Enquiry') ? 'Website Enquiry' : 'Website'));
+    return `
+      <tr>
+        <td>
+          <div class="crm-person">
+            <span>${initials(b.leads?.name)}</span>
+            <div>
+              <b>${esc(b.leads?.name || 'Unknown')}</b>
+            </div>
+          </div>
+        </td>
+        <td>
+          <a href="https://wa.me/${String(b.leads?.phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" style="color: #128C7E; font-weight: 700; text-decoration: none;">
+            ${esc(b.leads?.phone || '—')} 💬
+          </a>
+        </td>
+        <td>${esc(b.leads?.email || '—')}</td>
+        <td><b>${esc(b.properties?.projects?.name || 'VR Green Meadows')}</b></td>
+        <td>
+          <b>${esc(b.properties?.property_code ? 'Plot ' + b.properties.property_code : (b.properties?.title || '—'))}</b>
+          ${b.booking_reference ? `<small class="crm-cell-sub">Ref: ${esc(b.booking_reference)}</small>` : ''}
+        </td>
+        <td>${date(b.booked_at || b.created_at)}</td>
+        <td><span class="crm-badge">${esc(src)}</span></td>
+        <td><span class="crm-badge ${cls(b.status)}">${label(b.status)}</span></td>
+        <td style="max-width: 220px; white-space: normal; font-size: 12px; line-height: 1.4;">
+          ${b.amount ? `<div style="font-weight: 700; color: #166534; margin-bottom: 2px;">Advance: ₹${Number(b.amount).toLocaleString('en-IN')}</div>` : ''}
+          ${esc(b.notes || '—')}
+        </td>
+        <td>
+          <div style="display: flex; gap: 6px;">
+            ${b.status === 'CONFIRMED' ? `
+              <button class="crm-action" data-booking-complete="${b.id}">Complete</button>
+              <button class="crm-action danger" data-booking-cancel="${b.id}">Cancel</button>
+            ` : b.status === 'COMPLETED' ? `
+              <span style="font-size: 11px; color: #16a34a; font-weight: 700;">✓ Completed</span>
+            ` : `
+              <span style="font-size: 11px; color: #dc2626; font-weight: 700;">Cancelled</span>
+            `}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 function reminders() {
@@ -1310,7 +1278,6 @@ function body() {
   return ({
     overview,
     enquiries,
-    leads,
     inbox,
     visits,
     inventory,
@@ -1323,7 +1290,7 @@ function body() {
 async function load() {
   const [a, b, c, d, e, f, g] = await Promise.all([
     api('/api/crm/summary'),
-    api('/api/crm/leads'),
+    api('/api/crm/enquiries'),
     api('/api/crm/conversations'),
     api('/api/crm/site-visits'),
     api('/api/crm/inventory'),
@@ -1331,7 +1298,7 @@ async function load() {
     api('/api/crm/reviews').catch(() => ({ reviews: [] }))
   ]);
   S.summary = a;
-  S.leads = b.leads || [];
+  S.enquiries = b.enquiries || [];
   S.conversations = c.conversations || [];
   S.visits = d.visits || [];
   S.inventory = e.properties || [];
@@ -1365,109 +1332,226 @@ function modal(html) {
   document.querySelectorAll('[data-close]').forEach((x) => (x.onclick = () => document.getElementById('crm-modal')?.remove()));
 }
 
-function leadModal(l) {
+function enquiryBookingModal(enquiryId) {
+  const enq = S.enquiries.find((x) => x.id === enquiryId);
+  if (!enq) return;
+  const availableProps = S.inventory.filter((x) => x.inventory_status === 'AVAILABLE' || x.id === enq.property_id);
   modal(`
     <button class="crm-modal-close" data-close>×</button>
-    <div class="crm-eyebrow">LEAD RECORD</div>
-    <h2>${l ? 'Edit Lead' : 'Add Lead'}</h2>
-    <form id="lead-form" class="crm-form">
-      <label>Full Name *
-        <input name="name" required value="${esc(l?.name || '')}">
-      </label>
-      <label>Phone Number *
-        <input name="phone" value="${esc(l?.phone || '')}" ${l ? 'readonly' : ''} placeholder="10-digit mobile number">
-      </label>
-      <label>Email Address
-        <input name="email" type="email" value="${esc(l?.email || '')}">
-      </label>
-      <label>Source
-        <input name="source" value="${esc(l?.source || 'crm')}">
-      </label>
-      <label>Status
-        <select name="status">
-          ${LEAD_STATUSES.map((x) => `<option value="${x}" ${(l?.status || 'new') === x ? 'selected' : ''}>${label(x)}</option>`).join('')}
+    <div class="crm-eyebrow">CONFIRM ENQUIRY BOOKING</div>
+    <h2>Book Plot for ${esc(enq.name)}</h2>
+    <p style="color: #6b7280; font-size: 12px; margin-top: -6px; margin-bottom: 14px;">
+      Converting this enquiry to BOOKED creates a confirmed booking, marks the plot BOOKED, and synchronizes the public website.
+    </p>
+    <form id="enquiry-book-form" class="crm-form">
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; font-size: 12px; display: grid; gap: 4px;">
+        <div><strong>Customer:</strong> ${esc(enq.name)}</div>
+        <div><strong>Phone:</strong> ${esc(enq.phone)}</div>
+        <div><strong>Email:</strong> ${esc(enq.email || '—')}</div>
+        <div><strong>Customer Note:</strong> ${esc(enq.notes || '—')}</div>
+      </div>
+      <label>Select Plot / Property to Book *
+        <select name="property_id" required>
+          ${availableProps.map((p) => `
+            <option value="${p.id}" ${p.id === enq.property_id || (enq.property && p.property_code === enq.property) ? 'selected' : ''}>
+              ${esc(p.property_code)} · ${esc(p.title || p.projects?.name || 'Unit')} (${p.inventory_status})
+            </option>
+          `).join('')}
         </select>
       </label>
-      <label>Notes / Requirements
-        <textarea name="notes" rows="4">${esc(l?.notes || '')}</textarea>
+      <label>Advance Amount Received (₹) (Optional)
+        <input name="amount" type="number" placeholder="e.g. 100000">
+      </label>
+      <label>Booking Notes (Optional)
+        <textarea name="notes" rows="2" placeholder="Payment reference or remarks"></textarea>
       </label>
       <div class="crm-modal-actions">
         <button type="button" class="crm-small-btn" data-close>Cancel</button>
-        <button class="crm-primary">Save Lead</button>
+        <button class="crm-primary" style="background:#15803d; border-color:#15803d;">Confirm Booking &amp; Update Website</button>
       </div>
     </form>
   `);
-  document.getElementById('lead-form').onsubmit = async (e) => {
+
+  document.getElementById('enquiry-book-form').onsubmit = async (e) => {
     e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
     try {
-      await api(l ? `/api/crm/leads/${l.id}` : '/api/crm/leads', {
-        method: l ? 'PATCH' : 'POST',
-        body: JSON.stringify(Object.fromEntries(new FormData(e.target)))
+      await api(`/api/crm/enquiries/${enquiryId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: 'BOOKED',
+          property_id: data.property_id,
+          amount: data.amount ? Number(data.amount) : null,
+          notes: data.notes
+        })
       });
+      const bookedProp = S.inventory.find((x) => x.id === data.property_id);
+      if (bookedProp) {
+        syncPlotOverride(bookedProp.property_code, 'BOOKED');
+        syncPlotOverride(bookedProp.id, 'BOOKED');
+      }
       document.getElementById('crm-modal')?.remove();
+      showToast(`Enquiry confirmed as BOOKED! Plot marked unavailable and website synced.`);
       await load();
       render();
-      showToast('Lead saved successfully.');
-    } catch (x) {
-      showToast(x.message, true);
+    } catch (err) {
+      showToast(err.message, true);
     }
   };
 }
 
-function visitModal(preselectedLeadId = '') {
-  const leads = S.leads.filter((x) => x.phone);
-  const props = S.inventory.filter((x) => x.inventory_status === 'AVAILABLE' || x.inventory_status === 'RESERVED');
+async function cancelEnquiry(enquiryId) {
+  if (!confirm('Mark this enquiry as CANCEL? (Record will be kept in history; inventory remains unchanged)')) return;
+  try {
+    await api(`/api/crm/enquiries/${enquiryId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'CANCEL' })
+    });
+    showToast('Enquiry marked as CANCEL. Inventory unchanged.');
+    await load();
+    render();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+function addSiteVisitModal() {
+  const availableProps = S.inventory.filter((x) => x.inventory_status === 'AVAILABLE' || x.inventory_status === 'RESERVED');
   modal(`
     <button class="crm-modal-close" data-close>×</button>
-    <div class="crm-eyebrow">SITE VISIT</div>
-    <h2>Create Site Visit Request</h2>
+    <div class="crm-eyebrow">OFFLINE SITE VISIT</div>
+    <h2>+ Add Site Visit</h2>
     <p style="color: #6b7280; font-size: 12px; margin-top: -6px; margin-bottom: 14px;">
-      Site visits are visitor appointments and NEVER modify plot inventory status.
+      Log an offline customer visit appointment. (Plot remains AVAILABLE).
     </p>
-    <form id="visit-form" class="crm-form">
-      <label>Customer / Lead
-        <select name="lead_id" required>
-          ${leads.map((x) => `
-            <option value="${x.id}" ${x.id === preselectedLeadId ? 'selected' : ''}>
-              ${esc(x.name || x.phone)} · ${esc(x.phone)}
-            </option>
-          `).join('')}
+    <form id="offline-visit-form" class="crm-form">
+      <label>Customer Name *
+        <input name="customer_name" required placeholder="e.g. Ramesh Varma">
+      </label>
+      <label>Phone Number *
+        <input name="customer_phone" type="tel" required placeholder="10-digit mobile number" maxlength="10">
+      </label>
+      <label>Email Address
+        <input name="customer_email" type="email" placeholder="customer@example.com">
+      </label>
+      <label>Project / Venture
+        <select name="project_name">
+          ${CRM_PROJECTS.map((p) => `<option value="${p.name}">${p.name}</option>`).join('')}
         </select>
       </label>
-      <label>Property
+      <label>Plot / Property *
         <select name="property_id" required>
-          ${props.map((x) => `
-            <option value="${x.id}">
-              ${esc(x.property_code)} · ${esc(x.title || '')} (${esc(x.projects?.name || '')})
+          ${availableProps.map((p) => `
+            <option value="${p.id}">
+              ${esc(p.property_code)} · ${esc(p.title || p.projects?.name || 'Unit')} (${p.inventory_status})
             </option>
           `).join('')}
         </select>
       </label>
-      <label>Preferred Date &amp; Time
-        <input name="scheduled_at" type="datetime-local">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <label>Visit Date *
+          <input name="visit_date" type="date" required value="${new Date().toISOString().split('T')[0]}">
+        </label>
+        <label>Visit Time
+          <input name="visit_time" type="time" value="11:00">
+        </label>
+      </div>
+      <label>Initial Status
+        <select name="status">
+          <option value="PENDING" selected>PENDING (Awaiting confirmation)</option>
+          <option value="CONFIRMED">CONFIRMED (Send WhatsApp confirmation)</option>
+        </select>
       </label>
-      <label>Visit Notes
-        <textarea name="notes" rows="3" placeholder="Pickup location, visitor preferences, etc."></textarea>
+      <label>Notes
+        <textarea name="notes" rows="2" placeholder="Customer requirements, pickup point, etc."></textarea>
       </label>
+      <input type="hidden" name="source" value="Offline" />
       <div class="crm-modal-actions">
         <button type="button" class="crm-small-btn" data-close>Cancel</button>
-        <button class="crm-primary">Create Request</button>
+        <button class="crm-primary">Save Site Visit</button>
       </div>
     </form>
   `);
-  document.getElementById('visit-form').onsubmit = async (e) => {
+
+  document.getElementById('offline-visit-form').onsubmit = async (e) => {
     e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    const scheduledAt = data.visit_date ? `${data.visit_date}T${data.visit_time || '11:00'}:00` : null;
     try {
       await api('/api/crm/site-visits', {
         method: 'POST',
-        body: JSON.stringify(Object.fromEntries(new FormData(e.target)))
+        body: JSON.stringify({
+          customer_name: data.customer_name,
+          customer_phone: data.customer_phone,
+          customer_email: data.customer_email,
+          property_id: data.property_id,
+          scheduled_at: scheduledAt,
+          status: data.status,
+          notes: data.notes ? `[Offline] ${data.notes}` : '[Offline Site Visit]',
+          source: 'Offline'
+        })
       });
       document.getElementById('crm-modal')?.remove();
       await load();
       render();
-      showToast('Site visit request created.');
-    } catch (x) {
-      showToast(x.message, true);
+      showToast('Offline site visit added to Site Visits.');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  };
+}
+
+function visitBookingModal(visitId) {
+  const v = S.visits.find((x) => x.id === visitId);
+  if (!v) return;
+  const prop = v.properties;
+  const lead = v.leads;
+  modal(`
+    <button class="crm-modal-close" data-close>×</button>
+    <div class="crm-eyebrow">CONVERT SITE VISIT TO BOOKED</div>
+    <h2>Book Plot ${esc(prop?.property_code || '')}</h2>
+    <p style="color: #6b7280; font-size: 12px; margin-top: -6px; margin-bottom: 14px;">
+      Customer decided to purchase! This creates a confirmed booking, updates plot to BOOKED, and syncs website.
+    </p>
+    <form id="visit-book-form" class="crm-form">
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; font-size: 12px; display: grid; gap: 4px;">
+        <div><strong>Customer:</strong> ${esc(lead?.name || 'Visitor')}</div>
+        <div><strong>Phone:</strong> ${esc(lead?.phone || '—')}</div>
+        <div><strong>Property:</strong> Plot ${esc(prop?.property_code || '—')} (${esc(prop?.projects?.name || 'VR Green Meadows')})</div>
+      </div>
+      <label>Advance Amount Received (₹) (Optional)
+        <input name="amount" type="number" placeholder="e.g. 100000">
+      </label>
+      <label>Booking Notes
+        <textarea name="notes" rows="2" placeholder="Payment receipt, terms agreed, etc."></textarea>
+      </label>
+      <div class="crm-modal-actions">
+        <button type="button" class="crm-small-btn" data-close>Cancel</button>
+        <button class="crm-primary" style="background:#15803d; border-color:#15803d;">Confirm Booking &amp; Update Website</button>
+      </div>
+    </form>
+  `);
+
+  document.getElementById('visit-book-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    try {
+      await api(`/api/crm/site-visits/${visitId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: 'BOOKED',
+          amount: data.amount ? Number(data.amount) : null,
+          notes: data.notes
+        })
+      });
+      if (prop?.property_code) syncPlotOverride(prop.property_code, 'BOOKED');
+      if (v.property_id) syncPlotOverride(v.property_id, 'BOOKED');
+      document.getElementById('crm-modal')?.remove();
+      showToast(`Site visit converted to BOOKED! Plot marked unavailable and website synced.`);
+      await load();
+      render();
+    } catch (err) {
+      showToast(err.message, true);
     }
   };
 }
@@ -1606,34 +1690,57 @@ async function patchBooking(id, status) {
   }
 }
 
-function bindLeadActions() {
-  document.querySelectorAll('[data-open-lead]').forEach((x) => {
-    x.onclick = () => {
-      const l = S.leads.find((y) => y.id === x.dataset.openLead);
-      if (l) leadModal(l);
+function bindEnquiryActions() {
+  document.querySelectorAll('[data-enquiry-book]').forEach((x) => {
+    x.onclick = () => enquiryBookingModal(x.dataset.enquiryBook);
+  });
+  document.querySelectorAll('[data-enquiry-cancel]').forEach((x) => {
+    x.onclick = () => cancelEnquiry(x.dataset.enquiryCancel);
+  });
+}
+
+function bindVisitActions() {
+  document.querySelectorAll('[data-confirm-visit]').forEach((x) => {
+    x.onclick = async () => {
+      const v = S.visits.find((y) => y.id === x.dataset.confirmVisit);
+      let at = v?.scheduled_at;
+      if (!at) {
+        at = prompt('Enter scheduled date/time (example: 2026-09-15 11:00 AM):');
+        if (!at) return;
+      }
+      await patchVisit(v.id, 'CONFIRMED', at);
     };
   });
-  document.querySelectorAll('[data-lead-status]').forEach((x) => {
-    x.onchange = async () => {
-      try {
-        await api(`/api/crm/leads/${x.dataset.leadStatus}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ status: x.value })
-        });
-        await load();
-        render();
-        showToast('Lead status updated.');
-      } catch (e) {
-        showToast(e.message, true);
-      }
+  document.querySelectorAll('[data-visit-book]').forEach((x) => {
+    x.onclick = () => visitBookingModal(x.dataset.visitBook);
+  });
+  document.querySelectorAll('[data-cancel-visit]').forEach((x) => {
+    x.onclick = async () => {
+      if (confirm('Cancel this site visit request?')) await patchVisit(x.dataset.cancelVisit, 'CANCELLED');
+    };
+  });
+  document.querySelectorAll('[data-complete-visit]').forEach((x) => {
+    x.onclick = () => patchVisit(x.dataset.completeVisit, 'COMPLETED');
+  });
+  document.querySelectorAll('[data-reschedule-visit]').forEach((x) => {
+    x.onclick = async () => {
+      const at = prompt('New date/time for visit:');
+      if (at) await patchVisit(x.dataset.rescheduleVisit, 'RESCHEDULED', at);
     };
   });
 }
 
-function bindEnquiryActions() {
-  bindLeadActions();
-  document.querySelectorAll('[data-convert-visit]').forEach((x) => {
-    x.onclick = () => visitModal(x.dataset.convertVisit);
+function bindBookingActions() {
+  document.querySelectorAll('[data-booking-confirm]').forEach((x) => {
+    x.onclick = () => patchBooking(x.dataset.bookingConfirm, 'CONFIRMED');
+  });
+  document.querySelectorAll('[data-booking-complete]').forEach((x) => {
+    x.onclick = () => patchBooking(x.dataset.bookingComplete, 'COMPLETED');
+  });
+  document.querySelectorAll('[data-booking-cancel]').forEach((x) => {
+    x.onclick = async () => {
+      if (confirm('Cancel this booking and release inventory?')) await patchBooking(x.dataset.bookingCancel, 'CANCELLED');
+    };
   });
 }
 
@@ -1725,28 +1832,62 @@ function bind() {
   const handleSearchInput = (e) => {
     S.search = e.target.value;
     const q = S.search.toLowerCase();
-    if (S.tab === 'leads') {
-      const tbody = document.getElementById('leads-table-body');
-      const countEl = document.querySelector('.crm-card-head h2');
-      const filtered = S.leads.filter((l) =>
-        (S.leadFilter === 'all' || (l.status || 'new') === S.leadFilter) &&
-        (!q || [l.name, l.phone, l.email, l.project, l.property, l.source, l.notes].some((v) => String(v || '').toLowerCase().includes(q)))
-      );
-      if (countEl) countEl.textContent = `${filtered.length} leads`;
-      if (tbody) {
-        tbody.innerHTML = renderLeadRows(filtered);
-        bindLeadActions();
-      }
-    } else if (S.tab === 'enquiries') {
+    if (S.tab === 'enquiries') {
       const tbody = document.getElementById('enquiries-table-body');
       const countEl = document.querySelector('.crm-card-head h2');
-      const filtered = S.leads.filter((l) =>
-        !q || [l.name, l.phone, l.email, l.project, l.property, l.source, l.notes].some((v) => String(v || '').toLowerCase().includes(q))
+      const filtered = S.enquiries.filter((enq) =>
+        !q || [enq.name, enq.phone, enq.email, enq.project, enq.property, enq.notes, enq.status].some((v) => String(v || '').toLowerCase().includes(q))
       );
-      if (countEl) countEl.textContent = `${filtered.length} Enquiries`;
+      if (countEl) countEl.textContent = `${filtered.length} Website Enquiries`;
       if (tbody) {
         tbody.innerHTML = renderEnquiryRows(filtered);
         bindEnquiryActions();
+      }
+    } else if (S.tab === 'visits') {
+      const tbody = document.getElementById('visits-table-body');
+      const countEl = document.querySelector('.crm-card-head h2');
+      const filtered = S.visits.filter((v) => {
+        if (S.visitFilter !== 'ALL') {
+          if (S.visitFilter === 'PENDING' && v.status !== 'REQUESTED' && v.status !== 'PENDING') return false;
+          if (S.visitFilter !== 'PENDING' && v.status !== S.visitFilter) return false;
+        }
+        if (q) {
+          const cust = v.leads?.name || '';
+          const phone = v.leads?.phone || '';
+          const email = v.leads?.email || '';
+          const proj = v.properties?.projects?.name || v.properties?.title || '';
+          const code = v.properties?.property_code || '';
+          const notes = v.notes || '';
+          if (![cust, phone, email, proj, code, notes].some((val) => val.toLowerCase().includes(q))) return false;
+        }
+        return true;
+      });
+      if (countEl) countEl.textContent = `${filtered.length} Site Visits`;
+      if (tbody) {
+        tbody.innerHTML = renderVisitRows(filtered);
+        bindVisitActions();
+      }
+    } else if (S.tab === 'bookings') {
+      const tbody = document.getElementById('bookings-table-body');
+      const countEl = document.querySelector('.crm-card-head h2');
+      const filtered = S.bookings.filter((b) => {
+        if (S.bookingFilter !== 'ALL' && b.status !== S.bookingFilter) return false;
+        if (q) {
+          const cust = b.leads?.name || '';
+          const phone = b.leads?.phone || '';
+          const email = b.leads?.email || '';
+          const code = b.properties?.property_code || '';
+          const proj = b.properties?.projects?.name || '';
+          const ref = b.booking_reference || '';
+          const notes = b.notes || '';
+          if (![cust, phone, email, code, proj, ref, notes].some((val) => val.toLowerCase().includes(q))) return false;
+        }
+        return true;
+      });
+      if (countEl) countEl.textContent = `${filtered.length} Confirmed Bookings`;
+      if (tbody) {
+        tbody.innerHTML = renderBookingRows(filtered);
+        bindBookingActions();
       }
     } else if (S.tab === 'reviews') {
       const tbody = document.getElementById('reviews-table-body');
@@ -1768,17 +1909,18 @@ function bind() {
     }
   };
 
-  document.getElementById('lead-search')?.addEventListener('input', handleSearchInput);
   document.getElementById('enquiry-search')?.addEventListener('input', handleSearchInput);
+  document.getElementById('visit-search')?.addEventListener('input', handleSearchInput);
+  document.getElementById('booking-search')?.addEventListener('input', handleSearchInput);
   document.getElementById('review-search')?.addEventListener('input', handleSearchInput);
-
-  document.getElementById('lead-filter')?.addEventListener('change', (e) => {
-    S.leadFilter = e.target.value;
-    render();
-  });
 
   document.getElementById('visit-filter')?.addEventListener('change', (e) => {
     S.visitFilter = e.target.value;
+    render();
+  });
+
+  document.getElementById('booking-filter')?.addEventListener('change', (e) => {
+    S.bookingFilter = e.target.value;
     render();
   });
 
@@ -1910,13 +2052,8 @@ function bind() {
     showToast('Inventory reloaded.');
   });
 
-  document.getElementById('booking-filter')?.addEventListener('change', (e) => {
-    S.bookingFilter = e.target.value;
-    render();
-  });
-
-  document.getElementById('add-lead')?.addEventListener('click', () => leadModal());
-  document.getElementById('add-visit')?.addEventListener('click', () => visitModal());
+  document.getElementById('add-visit')?.addEventListener('click', () => addSiteVisitModal());
+  document.getElementById('add-booking')?.addEventListener('click', () => offlineBookingModal());
   document.getElementById('add-offline-booking')?.addEventListener('click', () => offlineBookingModal());
 
   document.querySelectorAll('[data-offline-book]').forEach((x) => {
@@ -1924,6 +2061,8 @@ function bind() {
   });
 
   bindEnquiryActions();
+  bindVisitActions();
+  bindBookingActions();
   bindReviewActions();
 
   document.querySelectorAll('[data-conversation]').forEach((x) => {
@@ -1979,49 +2118,6 @@ function bind() {
     }
   });
 
-  document.querySelectorAll('[data-confirm-visit]').forEach((x) => {
-    x.onclick = async () => {
-      const v = S.visits.find((y) => y.id === x.dataset.confirmVisit);
-      let at = v?.scheduled_at;
-      if (!at) {
-        at = prompt('Enter scheduled date/time (example: 2026-09-15 11:00 AM):');
-        if (!at) return;
-      }
-      await patchVisit(v.id, 'CONFIRMED', at);
-    };
-  });
-
-  document.querySelectorAll('[data-cancel-visit]').forEach((x) => {
-    x.onclick = async () => {
-      if (confirm('Cancel this site visit request?')) await patchVisit(x.dataset.cancelVisit, 'CANCELLED');
-    };
-  });
-
-  document.querySelectorAll('[data-complete-visit]').forEach((x) => {
-    x.onclick = () => patchVisit(x.dataset.completeVisit, 'COMPLETED');
-  });
-
-  document.querySelectorAll('[data-reschedule-visit]').forEach((x) => {
-    x.onclick = async () => {
-      const at = prompt('New date/time for visit:');
-      if (at) await patchVisit(x.dataset.rescheduleVisit, 'RESCHEDULED', at);
-    };
-  });
-
-  document.querySelectorAll('[data-booking-confirm]').forEach((x) => {
-    x.onclick = () => patchBooking(x.dataset.bookingConfirm, 'CONFIRMED');
-  });
-
-  document.querySelectorAll('[data-booking-complete]').forEach((x) => {
-    x.onclick = () => patchBooking(x.dataset.bookingComplete, 'COMPLETED');
-  });
-
-  document.querySelectorAll('[data-booking-cancel]').forEach((x) => {
-    x.onclick = async () => {
-      if (confirm('Cancel this booking and release inventory?')) await patchBooking(x.dataset.bookingCancel, 'CANCELLED');
-    };
-  });
-
   document.getElementById('reminder-settings-form')?.addEventListener('submit', (e) => {
     e.preventDefault();
     const settings = {
@@ -2047,7 +2143,7 @@ function render() {
       try {
         selectionStart = activeEl.selectionStart;
         selectionEnd = activeEl.selectionEnd;
-      } catch (e) {}
+      } catch (e) { }
     }
 
     root.innerHTML = shell(body());
@@ -2061,7 +2157,7 @@ function render() {
           if (selectionStart !== null && selectionEnd !== null) {
             restoredEl.setSelectionRange(selectionStart, selectionEnd);
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 

@@ -126,7 +126,7 @@ export async function findOrCreateLead(name, rawPhone, email, notes, source = 'W
     email: email || null,
     source: source || 'Website',
     status: status || 'new',
-    notes: notes || 'Created from website enquiry form.'
+    notes: notes || ''
   }).catch((err) => {
     console.error('[lead] Failed to insert lead:', err.message || err);
     throw err;
@@ -349,7 +349,7 @@ export async function handleBookings(req, pathParts, body = {}) {
   if (isEnquiry) {
     console.log(`[enquiry] Processing customer enquiry for "${name}" (${normalizedPhone}) - Project: ${projectName}`);
     
-    const formattedNotes = `[Website Enquiry] Project: ${projectName}${propertyCode ? ` | Property/Plot: ${propertyCode}` : ''}${propertyType ? ` | Type: ${propertyType}` : ''}\nMessage: ${message || 'Customer requested project details and pricing.'}`;
+    const customerNotes = message ? message.trim() : '';
     
     let lead = null;
     try {
@@ -357,7 +357,7 @@ export async function handleBookings(req, pathParts, body = {}) {
         name,
         normalizedPhone,
         email,
-        formattedNotes,
+        customerNotes,
         'Website',
         'new'
       );
@@ -375,7 +375,7 @@ export async function handleBookings(req, pathParts, body = {}) {
           lead_id: lead.id,
           property_id: propertyId,
           interest_type: 'enquiry',
-          notes: message || `Enquiry for ${projectName} ${propertyCode}`
+          notes: customerNotes
         }).catch((e) => console.warn('[enquiry] lead_properties warning:', e?.message || e));
       }
     } catch (dbErr) {
