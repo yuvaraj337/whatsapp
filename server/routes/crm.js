@@ -464,17 +464,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       };
     }
 
-      return {
-        status: 200,
-        data: {
-          success: true,
-          status: 'BOOKED',
-          booking,
-          property_id: propertyId,
-          property_code: property.property_code
-        }
-      };
-    }
+    return { status: 200, data: { success: true } };
   }
 
   if (req.method === 'GET' && section === 'leads') {
