@@ -15,16 +15,20 @@ function authorized(req) { const key = process.env.CRM_ACCESS_KEY; return Boolea
 
 function cleanEnquiryMessage(raw) {
   if (!raw) return '-';
-  let str = String(raw);
-  str = str.replace(/\[Website Enquiry\][^\n]*/gi, '');
-  str = str.replace(/(?:Project|Property\/Plot|Plot|Type|Area|Price):\s*[^\n|]*/gi, '');
-  str = str.replace(/Message:\s*/gi, '');
-  str = str.replace(/created from website enquiry form\.?/gi, '');
-  str = str.replace(/---+/g, '');
-  const lines = str.split('\n').map(l => l.trim()).filter(Boolean);
-  const uniqueLines = Array.from(new Set(lines));
-  str = uniqueLines.join(' ').trim();
-  return str || '-';
+  const str = String(raw);
+  const msgMatch = str.match(/Message:\s*([^|\n]+)/i);
+  if (msgMatch && msgMatch[1].trim()) {
+    return msgMatch[1].trim();
+  }
+  let cleaned = str
+    .replace(/\[Website (?:Enquiry|Site Visit)\]/gi, '')
+    .replace(/(?:Project|Property\/Plot|Plot|Type|Area|Price|Unit):\s*[^|\n]*/gi, '')
+    .replace(/Message:\s*/gi, '')
+    .replace(/created from website enquiry form\.?/gi, '')
+    .replace(/[|—\-]+/g, ' ');
+  const lines = cleaned.split('\n').map(l => l.trim()).filter(Boolean);
+  const unique = Array.from(new Set(lines)).join(' ').trim();
+  return unique || '-';
 }
 
 async function sendWhatsApp(to, body) {

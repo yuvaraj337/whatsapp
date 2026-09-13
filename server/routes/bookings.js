@@ -272,34 +272,7 @@ export async function createSiteVisitRecord(params = {}) {
     throw new Error('Failed to resolve or create customer lead for site visit.');
   }
 
-  // 2. Prevent duplicate site visit within same day for same phone & property
-  if (resolvedPropId) {
-    const existingVisits = await supabaseAdminGet('site_visits', {
-      select: 'id,status,scheduled_at,requested_at',
-      lead_id: `eq.${lead.id}`,
-      property_id: `eq.${resolvedPropId}`,
-      status: `in.(REQUESTED,CONFIRMED)`,
-      order: 'requested_at.desc',
-      limit: '1'
-    }).catch(() => []);
-
-    if (existingVisits[0]) {
-      console.log(`[site-visit] Existing pending/confirmed visit found for lead ${lead.id} on property ${resolvedPropId}, returning existing record.`);
-      if (whatsapp_message_id) {
-        recentSubmissionsCache.set(whatsapp_message_id, existingVisits[0].id);
-      }
-      return {
-        visit: existingVisits[0],
-        lead,
-        site_visit_id: existingVisits[0].id,
-        success: true,
-        duplicatePrevented: true,
-        duplicate: true
-      };
-    }
-  }
-
-  // 3. Save site visit request (Status is REQUESTED / PENDING, inventory remains AVAILABLE)
+  // 2. Save site visit request (Every requested visit creates a record, inventory remains AVAILABLE)
   const visitRows = await supabaseAdminPost('site_visits', {
     lead_id: lead.id,
     property_id: resolvedPropId,
@@ -315,14 +288,31 @@ export async function createSiteVisitRecord(params = {}) {
     recentSubmissionsCache.set(whatsapp_message_id, siteVisit.id);
   }
 
-  // 4. Record in lead_properties
+  // 3. Record in lead_properties (upsert)
   if (resolvedPropId) {
-    await supabaseAdminPost('lead_properties', {
-      lead_id: lead.id,
-      property_id: resolvedPropId,
-      interest_type: 'site_visit',
-      notes: `Site visit scheduled for ${date} (${time})`
-    }).catch(() => null);
+    const existingLP = await supabaseAdminGet('lead_properties', {
+      select: 'lead_id',
+      lead_id: `eq.${lead.id}`,
+      property_id: `eq.${resolvedPropId}`,
+      limit: '1'
+    }).catch(() => []);
+
+    if (existingLP[0]) {
+      await supabaseAdminPatch('lead_properties', {
+        lead_id: `eq.${lead.id}`,
+        property_id: `eq.${resolvedPropId}`
+      }, {
+        interest_type: 'site_visit',
+        notes: `Site visit scheduled for ${date} (${time})`
+      }).catch(() => null);
+    } else {
+      await supabaseAdminPost('lead_properties', {
+        lead_id: lead.id,
+        property_id: resolvedPropId,
+        interest_type: 'site_visit',
+        notes: `Site visit scheduled for ${date} (${time})`
+      }).catch(() => null);
+    }
   }
 
   // 5. Ensure WhatsApp conversation exists for lead
@@ -409,24 +399,7 @@ export async function handleBookings(req, pathParts, body = {}) {
     /enquiry|inquiry|preferred\s*slot/i.test(date) ||
     /preferred\s*slot/i.test(time);
 
-  // 3. Deduplication Check (30-second window for same phone and project)
-  const dedupeKey = `${normalizedPhone}_${projectName}_${isEnquiry ? 'enquiry' : date}`;
-  const now = Date.now();
-  if (recentSubmissionsCache.has(dedupeKey)) {
-    const cached = recentSubmissionsCache.get(dedupeKey);
-    if (now - cached.timestamp < 30000) {
-      console.log(`[submission] duplicate request detected within 30s for ${dedupeKey}, returning existing record.`);
-      return {
-        status: 200,
-        data: {
-          ...cached.response,
-          duplicatePrevented: true
-        }
-      };
-    }
-  }
-
-  // 4. Handle Flow: ENQUIRY vs SITE VISIT
+  // 3. Handle Flow: ENQUIRY vs SITE VISIT
   if (isEnquiry) {
     console.log(`[enquiry] Processing customer enquiry for "${name}" (${normalizedPhone}) - Project: ${projectName}`);
     
@@ -452,12 +425,29 @@ export async function handleBookings(req, pathParts, body = {}) {
       });
 
       if (propertyId && lead?.id) {
-        await supabaseAdminPost('lead_properties', {
-          lead_id: lead.id,
-          property_id: propertyId,
-          interest_type: 'enquiry',
-          notes: customerNotes
-        }).catch((e) => console.warn('[enquiry] lead_properties warning:', e?.message || e));
+        const existingLP = await supabaseAdminGet('lead_properties', {
+          select: 'lead_id',
+          lead_id: `eq.${lead.id}`,
+          property_id: `eq.${propertyId}`,
+          limit: '1'
+        }).catch(() => []);
+
+        if (existingLP[0]) {
+          await supabaseAdminPatch('lead_properties', {
+            lead_id: `eq.${lead.id}`,
+            property_id: `eq.${propertyId}`
+          }, {
+            interest_type: 'enquiry',
+            notes: customerNotes
+          }).catch((e) => console.warn('[enquiry] lead_properties patch warning:', e?.message || e));
+        } else {
+          await supabaseAdminPost('lead_properties', {
+            lead_id: lead.id,
+            property_id: propertyId,
+            interest_type: 'enquiry',
+            notes: customerNotes
+          }).catch((e) => console.warn('[enquiry] lead_properties post warning:', e?.message || e));
+        }
       }
     } catch (dbErr) {
       console.error('[enquiry] Database insert failed:', dbErr?.message || dbErr);
