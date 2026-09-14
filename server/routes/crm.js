@@ -15,23 +15,20 @@ function authorized(req) { const key = process.env.CRM_ACCESS_KEY; return Boolea
 
 export function cleanCustomerNote(raw) {
   if (!raw) return '-';
-  const str = String(raw).trim();
+  let str = String(raw).trim();
   if (!str) return '-';
 
-  // If there's an explicit "Message: <text>" pattern, prioritize extracting that
-  const msgMatch = str.match(/(?:Customer Note|Message|Remarks|Note):\s*([^|\n]+)/i);
-  if (msgMatch && msgMatch[1].trim()) {
-    const candidate = msgMatch[1].trim();
-    if (!/^(?:none|nil|na|n\/a|-)$/i.test(candidate)) {
-      return candidate;
-    }
-  }
+  // Strip all bracketed tags first
+  str = str.replace(/\[(?:Website Enquiry|Website Site Visit|Offline Site Visit|Contact Enquiry|Offline|BOOKED|AUTO-CAPTURED[^\]]*)\]/gi, '');
 
-  // Strip all system tags, metadata headers, and prefix lines
-  let cleaned = str
-    .replace(/\[(?:Website Enquiry|Website Site Visit|Offline Site Visit|Contact Enquiry|Offline|BOOKED|AUTO-CAPTURED[^\]]*)\]/gi, '')
-    .replace(/(?:Project|Property\/Plot|Plot|Type|Area|Price|Unit|Facing|Source|Date|Time|Scheduled|Status|Message ID|Enquiry ID|Booking ID|Reference|Original Interested Property|Booked Property):\s*[^|\n]*/gi, '')
-    .replace(/(?:Message|Remarks|Notes?):\s*/gi, '')
+  // Strip metadata key-values like Project: ..., Unit: ..., Property: ..., Type: ..., etc.
+  str = str.replace(/(?:Project|Property(?:\/Plot)?|Plot|Type|Area|Price|Unit|Facing|Road|Source|Date|Time|Scheduled|Status|Message ID|Enquiry ID|Booking ID|Reference|Original Interested Property|Booked Property):\s*[^|\n]*/gi, '');
+
+  // Strip Message:, Customer Note:, Note:, Remarks: labels
+  str = str.replace(/(?:Customer Note|Message|Remarks|Notes?):\s*/gi, '');
+
+  // Strip standard boilerplate sentences
+  str = str
     .replace(/created from website (?:enquiry|contact) form\.?/gi, '')
     .replace(/Site visit scheduled for [^|\n]*/gi, '')
     .replace(/Offline customer for property [^|\n]*/gi, '')
@@ -39,7 +36,7 @@ export function cleanCustomerNote(raw) {
     .trim();
 
   // Split lines and clean
-  const lines = cleaned.split('\n')
+  const lines = str.split('\n')
     .map(l => l.trim())
     .filter(l => l && !l.startsWith('http') && !l.includes('wa.me') && !/^(?:none|nil|na|n\/a|-)$/i.test(l));
 
@@ -1271,7 +1268,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
     };
   }
 
-  if (req.method === 'POST' && section === 'bookings') {
+  if (req.method === 'POST' && section === 'bookings' && !id) {
     let leadId = clean(body.lead_id);
     const propertyId = clean(body.property_id);
 

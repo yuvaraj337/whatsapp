@@ -404,8 +404,8 @@ export async function handleBookings(req, pathParts, body = {}) {
   // 3. Handle Flow: ENQUIRY vs SITE VISIT
   if (isEnquiry) {
     console.log(`[enquiry] Processing customer enquiry for "${name}" (${normalizedPhone}) - Project: ${projectName}`);
-    
-    const customerNotes = `[${body.source || 'Website'} Enquiry] Project: ${projectName}${propertyCode ? `, Unit: ${propertyCode}` : ''}${message ? ` | Message: ${message}` : ''}`;
+    // Store customer-entered note cleanly without concatenating system metadata (Section 28)
+    const customerNotes = message || '';
     
     let lead = null;
     try {

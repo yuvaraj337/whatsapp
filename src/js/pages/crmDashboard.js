@@ -87,28 +87,20 @@ const initials = (v) => (String(v || 'VR').split(/\s+/).filter(Boolean).slice(0,
 
 function cleanCustomerNote(raw) {
   if (!raw) return '-';
-  const str = String(raw).trim();
+  let str = String(raw).trim();
   if (!str) return '-';
 
-  const msgMatch = str.match(/(?:Customer Note|Message|Remarks|Note):\s*([^|\n]+)/i);
-  if (msgMatch && msgMatch[1].trim()) {
-    const candidate = msgMatch[1].trim();
-    if (!/^(?:none|nil|na|n\/a|-)$/i.test(candidate)) {
-      return candidate;
-    }
-  }
-
-  let cleaned = str
-    .replace(/\[(?:Website Enquiry|Website Site Visit|Offline Site Visit|Contact Enquiry|Offline|BOOKED|AUTO-CAPTURED[^\]]*)\]/gi, '')
-    .replace(/(?:Project|Property\/Plot|Plot|Type|Area|Price|Unit|Facing|Source|Date|Time|Scheduled|Status|Message ID|Enquiry ID|Booking ID|Reference|Original Interested Property|Booked Property):\s*[^|\n]*/gi, '')
-    .replace(/(?:Message|Remarks|Notes?):\s*/gi, '')
+  str = str.replace(/\[(?:Website Enquiry|Website Site Visit|Offline Site Visit|Contact Enquiry|Offline|BOOKED|AUTO-CAPTURED[^\]]*)\]/gi, '');
+  str = str.replace(/(?:Project|Property(?:\/Plot)?|Plot|Type|Area|Price|Unit|Facing|Road|Source|Date|Time|Scheduled|Status|Message ID|Enquiry ID|Booking ID|Reference|Original Interested Property|Booked Property):\s*[^|\n]*/gi, '');
+  str = str.replace(/(?:Customer Note|Message|Remarks|Notes?):\s*/gi, '');
+  str = str
     .replace(/created from website (?:enquiry|contact) form\.?/gi, '')
     .replace(/Site visit scheduled for [^|\n]*/gi, '')
     .replace(/Offline customer for property [^|\n]*/gi, '')
     .replace(/[|—\-]+/g, ' ')
     .trim();
 
-  const lines = cleaned.split('\n')
+  const lines = str.split('\n')
     .map(l => l.trim())
     .filter(l => l && !l.startsWith('http') && !l.includes('wa.me') && !/^(?:none|nil|na|n\/a|-)$/i.test(l));
 
