@@ -176,9 +176,12 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
     const siteVisitLeadIds = new Set(visits.map(v => v.lead_id));
     const enquiryLeads = leads.filter(l => {
       const src = (l.source || '').toLowerCase();
-      if (src.includes('whatsapp') || src.includes('offline') || src.includes('walkin')) return false;
+      if (src.includes('offline') || src.includes('walkin')) return false;
       const hasEnquiryInterest = leadProperties.some(lp => lp.lead_id === l.id && lp.interest_type === 'enquiry');
-      const notesSayEnquiry = l.notes && /enquiry|inquiry/i.test(l.notes);
+      const notesSayEnquiry = l.notes && /\[WhatsApp Enquiry\]|\[Website AI Enquiry\]|\[Website Enquiry\]|\[Contact Enquiry\]|enquiry|inquiry/i.test(l.notes);
+      if (src.includes('whatsapp')) {
+        return hasEnquiryInterest || notesSayEnquiry;
+      }
       if (hasEnquiryInterest || notesSayEnquiry) return true;
       if (siteVisitLeadIds.has(l.id) && l.status === 'site_visit') return false;
       return true;
@@ -248,13 +251,26 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
 
     for (const l of leads) {
       const src = (l.source || '').toLowerCase();
-      if (src.includes('whatsapp') || src.includes('offline') || src.includes('walkin')) continue;
+      if (src.includes('offline') || src.includes('walkin')) continue;
 
       const leadLps = (lpByLead.get(l.id) || []).filter(lp => lp.interest_type !== 'archived');
+      const hasEnquiryInterest = leadLps.some(lp => lp.interest_type === 'enquiry');
+      const notesSayEnquiry = l.notes && /\[WhatsApp Enquiry\]|\[Website AI Enquiry\]|\[Website Enquiry\]|\[Contact Enquiry\]|enquiry|inquiry/i.test(l.notes);
+
+      if (src.includes('whatsapp') && !hasEnquiryInterest && !notesSayEnquiry) {
+        continue;
+      }
+
+      let defaultEnqSource = 'Website';
+      if (src.includes('whatsapp') || (l.notes && /\[WhatsApp/i.test(l.notes))) {
+        defaultEnqSource = 'WhatsApp';
+      } else if (src.includes('ai') || (l.notes && /\[Website AI/i.test(l.notes))) {
+        defaultEnqSource = 'Website AI';
+      }
 
       const blocks = (l.notes || '').split(/\n---\n/).filter(b => {
         const isSiteVisit = /\[Website Site Visit\]|\[Offline Site Visit\]|Site visit scheduled/i.test(b);
-        const isEnquiry = /\[Website Enquiry\]|\[Contact Enquiry\]|enquiry|inquiry/i.test(b);
+        const isEnquiry = /\[WhatsApp Enquiry\]|\[Website AI Enquiry\]|\[Website Enquiry\]|\[Contact Enquiry\]|enquiry|inquiry/i.test(b);
         return !isSiteVisit && (isEnquiry || !b.includes('Site Visit'));
       });
 
@@ -300,6 +316,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
             status = 'CANCEL';
           }
 
+          const blockSource = /\[WhatsApp/i.test(b) ? 'WhatsApp' : (/\[Website AI/i.test(b) ? 'Website AI' : defaultEnqSource);
           const cleanNote = cleanCustomerNote(b);
           leadEnqs.push({
             id: `${l.id}:${matchedProp?.id || 'b_' + bIdx}`,
@@ -313,7 +330,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
             notes: cleanNote,
             customer_note: cleanNote,
             status,
-            source: 'Website',
+            source: blockSource,
             created_at: l.created_at
           });
         });
@@ -348,13 +365,13 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
             notes: cleanLpNote,
             customer_note: cleanLpNote,
             status,
-            source: 'Website',
+            source: defaultEnqSource,
             created_at: lp.created_at || l.created_at
           });
         }
       });
 
-      if (leadEnqs.length === 0 && (l.status === 'new' || !l.status)) {
+      if (leadEnqs.length === 0 && (l.status === 'new' || !l.status) && !src.includes('whatsapp')) {
         const cleanLeadNote = cleanCustomerNote(l.notes);
         leadEnqs.push({
           id: l.id,
@@ -368,7 +385,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
           notes: cleanLeadNote,
           customer_note: cleanLeadNote,
           status: 'PENDING',
-          source: 'Website',
+          source: defaultEnqSource,
           created_at: l.created_at
         });
       }

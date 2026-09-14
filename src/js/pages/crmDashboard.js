@@ -237,7 +237,7 @@ function shell(bodyContent) {
 
   const descMap = {
     overview: 'A single view of sales activity and performance.',
-    enquiries: 'Customer enquiries from website contact forms, brochures, and showcase modals.',
+    enquiries: 'Customer enquiries from website contact forms, WhatsApp, and AI chatbot.',
     inbox: 'Manage WhatsApp customer conversations and AI handoff.',
     visits: 'Review site visit requests. Confirming a visit NEVER modifies plot inventory.',
     inventory: 'Interactive Master Plan and live plot status control with full manual owner authority.',
@@ -322,7 +322,7 @@ function overview() {
 
   return `
     <div class="crm-stats">
-      ${stat('Website Enquiries', totalEnquiriesCount, `${newEnquiriesCount} pending review`, '✉')}
+      ${stat('Customer Enquiries', totalEnquiriesCount, `${newEnquiriesCount} pending review`, '✉')}
       ${stat('Pending Site Visits', pendingVisitsCount, 'awaiting confirmation', '⌖')}
       ${stat('Confirmed Visits', confirmedVisitsCount, 'scheduled with customers', '✓')}
       ${stat('Confirmed Bookings', confirmedBookingsCount, 'units booked', '★')}
@@ -404,8 +404,8 @@ function enquiries() {
     <section class="crm-card">
       <div class="crm-card-head">
         <div>
-          <h2>${rows.length} ${S.enquiryFilter === 'cancelled' ? 'Cancelled' : 'Active'} Website Enquiries</h2>
-          <p>${S.enquiryFilter === 'cancelled' ? 'Enquiries marked as cancelled. You can restore or archive them.' : 'Website enquiry submissions. Action: Book plot with financial breakdown or Cancel.'}</p>
+          <h2>${rows.length} ${S.enquiryFilter === 'cancelled' ? 'Cancelled' : 'Active'} Enquiries</h2>
+          <p>${S.enquiryFilter === 'cancelled' ? 'Enquiries marked as cancelled. You can restore or archive them.' : 'Customer enquiry submissions from Website, WhatsApp & AI Chatbot. Action: Book plot with financial breakdown or Cancel.'}</p>
         </div>
       </div>
       
@@ -419,6 +419,7 @@ function enquiries() {
               <th>Email</th>
               <th>Project / Property</th>
               <th>Customer Notes</th>
+              <th>Source</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
@@ -439,7 +440,7 @@ function enquiries() {
 
 function renderEnquiryRows(rows) {
   if (!rows.length) {
-    return `<tr><td colspan="7"><div class="crm-empty">No website enquiries match your search.</div></td></tr>`;
+    return `<tr><td colspan="8"><div class="crm-empty">No enquiries match your search.</div></td></tr>`;
   }
   return rows.map((e) => {
     const isBooked = e.status === 'BOOKED';
@@ -470,6 +471,9 @@ function renderEnquiryRows(rows) {
           ${esc(cleanNotes)}
         </td>
         <td>
+          <span class="crm-badge">${esc(e.source || 'Website')}</span>
+        </td>
+        <td>
           <span class="crm-badge ${isBooked ? 'status-booked' : isCancel ? 'status-cancelled' : 'status-hold'}">
             ${isBooked ? 'BOOKED' : isCancel ? 'CANCEL' : 'PENDING'}
           </span>
@@ -494,7 +498,7 @@ function renderEnquiryRows(rows) {
 
 function renderEnquiryCards(rows) {
   if (!rows.length) {
-    return `<div class="crm-empty">No website enquiries match your search.</div>`;
+    return `<div class="crm-empty">No enquiries match your search.</div>`;
   }
   return rows.map((e) => {
     const isBooked = e.status === 'BOOKED';
@@ -529,6 +533,10 @@ function renderEnquiryCards(rows) {
             <span class="crm-record-row-val">
               ${esc(e.project || 'VR Green Meadows')} · <b>${esc(formatUnitLabel(e.property, e.project))}</b>
             </span>
+          </div>
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Source:</span>
+            <span class="crm-record-row-val"><span class="crm-badge">${esc(e.source || 'Website')}</span></span>
           </div>
           <div class="crm-record-row">
             <span class="crm-record-row-label">Notes:</span>
@@ -2565,7 +2573,7 @@ function bind() {
         !q || [enq.name, enq.phone, enq.email, enq.project, enq.property, enq.notes, enq.status].some((v) => String(v || '').toLowerCase().includes(q))
       );
 
-      if (countEl) countEl.textContent = `${filtered.length} ${S.enquiryFilter === 'cancelled' ? 'Cancelled' : 'Active'} Website Enquiries`;
+      if (countEl) countEl.textContent = `${filtered.length} ${S.enquiryFilter === 'cancelled' ? 'Cancelled' : 'Active'} Enquiries`;
       if (tbody) tbody.innerHTML = renderEnquiryRows(filtered);
       if (cardsWrap) cardsWrap.innerHTML = renderEnquiryCards(filtered);
       bindEnquiryActions();
