@@ -2,6 +2,7 @@ import { listProjects, getProjectDetails } from './projectsService.js';
 import { listProperties, getPropertyByCode } from './propertiesService.js';
 import { listProjectPlots } from './plotsService.js';
 import { supabaseGet } from '../lib/supabase.js';
+import { processAgentMessage } from './crmAgentEngine.js';
 
 const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
@@ -144,7 +145,6 @@ function providerErrorDetails(payload) {
   };
 }
 
-import { processAgentMessage } from './crmAgentEngine.js';
 
 export async function answerAssistant({ message, conversation = [], phone = '', profileName = '', channel = 'website' }) {
   if (typeof message !== 'string' || !message.trim()) {

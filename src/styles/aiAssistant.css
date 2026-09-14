@@ -184,3 +184,13 @@
     z-index: 1240 !important;
   }
 }
+
+/* Remove Website AI Chatbot launcher from CRM Dashboard */
+body:has(.crm-app) #vr-ai-assistant,
+body:has(.crm-login-wrap) #vr-ai-assistant,
+body:has(.crm-main) #vr-ai-assistant,
+.crm-app ~ #vr-ai-assistant,
+#crm-app ~ #vr-ai-assistant {
+  display: none !important;
+}
+
