@@ -284,7 +284,7 @@ export async function handleWhatsApp(req, pathParts, searchParams, body = {}) {
 
             const reply = result?.status === 200
               ? result.data?.reply
-              : 'Thanks for reaching out to Real Estate Brothers group. Our team will get back to you shortly.';
+              : 'Thank you for contacting VR Real Estate! Our team is available to assist you with VR Green Meadows (Open Plots), VR Agro Lands (Farm Lands), VR Green Villas (Luxury Villas), and VR Heights (Premium Apartments). Feel free to ask any question or request a site visit!';
 
             console.log(`[whatsapp] sending reply to ${phone}: "${reply}"`);
             const raw = await graphSendText(phone, reply).catch((err) => {
