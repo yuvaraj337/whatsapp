@@ -303,6 +303,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
             status = 'CANCEL';
           }
 
+          const cleanNote = cleanCustomerNote(b);
           leadEnqs.push({
             id: `${l.id}:${matchedProp?.id || 'b_' + bIdx}`,
             lead_id: l.id,
@@ -312,7 +313,8 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
             project,
             property: property || '—',
             property_id: matchedProp?.id || null,
-            notes: cleanCustomerNote(b),
+            notes: cleanNote,
+            customer_note: cleanNote,
             status,
             source: 'Website',
             created_at: l.created_at
@@ -336,6 +338,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
             status = 'BOOKED';
           }
 
+          const cleanLpNote = cleanCustomerNote(lp.notes || l.notes);
           leadEnqs.push({
             id: `${l.id}:${propId || 'lp_' + idx}`,
             lead_id: l.id,
@@ -345,7 +348,8 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
             project,
             property,
             property_id: propId || null,
-            notes: cleanCustomerNote(lp.notes || l.notes),
+            notes: cleanLpNote,
+            customer_note: cleanLpNote,
             status,
             source: 'Website',
             created_at: lp.created_at || l.created_at
@@ -354,6 +358,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       });
 
       if (leadEnqs.length === 0 && (l.status === 'new' || !l.status)) {
+        const cleanLeadNote = cleanCustomerNote(l.notes);
         leadEnqs.push({
           id: l.id,
           lead_id: l.id,
@@ -363,7 +368,8 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
           project: 'VR Green Meadows',
           property: '—',
           property_id: null,
-          notes: cleanCustomerNote(l.notes),
+          notes: cleanLeadNote,
+          customer_note: cleanLeadNote,
           status: 'PENDING',
           source: 'Website',
           created_at: l.created_at
@@ -1101,9 +1107,14 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
             booking_reference: b.booking_reference,
             status: b.status,
             amount: fin.advance,
+            advance: fin.advance,
+            advance_amount: fin.advance,
             listed_price: fin.listed_price,
+            listed_price_at_booking: fin.listed_price,
             final_price: fin.final_price,
+            final_agreed_price: fin.final_price,
             remaining_amount: fin.remaining_amount,
+            remaining: fin.remaining_amount,
             booked_at: b.booked_at,
             notes: b.notes,
             customer_name: b.leads?.name || '',
@@ -1138,7 +1149,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         to_status: prop.inventory_status,
         reason: `Price updated by owner from ₹${prop.price || 0} to ₹${newPrice}`
       }).catch(() => null);
-      return { status: 200, data: { property: updated[0] || prop, price: newPrice } };
+      return { status: 200, data: { property: updated[0] || prop, price: newPrice, success: true } };
     }
     return inventoryUpdate(id, body.status, body.reason);
   }
@@ -1158,21 +1169,26 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       const fin = parseBookingFinancials(b, b.properties?.price);
       return {
         ...b,
+        property_code: b.properties?.property_code || '',
         listed_price: fin.listed_price,
+        listed_price_at_booking: fin.listed_price,
         final_price: fin.final_price,
+        final_agreed_price: fin.final_price,
         amount: fin.advance,
-        remaining_amount: fin.remaining_amount
+        advance: fin.advance,
+        advance_amount: fin.advance,
+        remaining_amount: fin.remaining_amount,
+        remaining: fin.remaining_amount
       };
     });
     return { status: 200, data: { bookings } };
   }
   if (req.method === 'POST' && section === 'offline-booking') {
     const propertyId = clean(body.property_id);
-    const name = clean(body.customer_name);
-    const phone = clean(body.customer_phone);
-    const email = clean(body.customer_email);
-    const targetStatus = clean(body.status).toUpperCase() === 'HOLD' ? 'RESERVED' : 'BOOKED';
-    const amount = body.amount ?? null;
+    const name = clean(body.customer_name || body.name);
+    const phone = clean(body.customer_phone || body.phone);
+    const email = clean(body.customer_email || body.email);
+    const targetStatus = clean(body.status || body.inventory_status).toUpperCase() === 'HOLD' ? 'RESERVED' : 'BOOKED';
     const notes = clean(body.notes) || 'Offline customer booking recorded via CRM';
 
     if (!propertyId || !name || !phone) {
@@ -1206,8 +1222,8 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       lead = createdLeads[0];
     }
 
-    const finalPrice = Number(body.final_price || body.finalPrice || prop.price || 0);
-    const advance = Number(body.amount ?? body.advance ?? 0);
+    const finalPrice = Number(body.final_agreed_price || body.final_price || body.finalPrice || prop.price || 0);
+    const advance = Number(body.advance_amount ?? body.advance ?? body.amount ?? 0);
     const remaining = Math.max(0, finalPrice - advance);
     const bookingNotes = `[Offline Booking] Listed Price: ₹${Number(prop.price || 0).toLocaleString('en-IN')} | Final Agreed Price: ₹${Number(finalPrice).toLocaleString('en-IN')} | Advance: ₹${Number(advance).toLocaleString('en-IN')} | Remaining: ₹${Number(remaining).toLocaleString('en-IN')}${notes ? ` | Notes: ${notes}` : ''}`;
 
@@ -1236,16 +1252,21 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
     }).catch(() => null);
 
     return {
-      status: 201,
+      status: 200,
       data: {
         success: true,
         booking: bookingRows[0] || null,
         lead,
         property_id: propertyId,
         inventory_status: targetStatus,
+        listed_price: Number(prop.price || 0),
+        listed_price_at_booking: Number(prop.price || 0),
         final_price: finalPrice,
+        final_agreed_price: finalPrice,
         advance,
-        remaining_amount: remaining
+        advance_amount: advance,
+        remaining_amount: remaining,
+        remaining
       }
     };
   }
@@ -1293,8 +1314,8 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       updated_at: new Date().toISOString()
     });
 
-    const finalPrice = Number(body.final_price || body.finalPrice || property.price || 0);
-    const advance = Number(body.amount ?? body.advance ?? 0);
+    const finalPrice = Number(body.final_agreed_price || body.final_price || body.finalPrice || property.price || 0);
+    const advance = Number(body.advance_amount ?? body.advance ?? body.amount ?? 0);
     const remaining = Math.max(0, finalPrice - advance);
     const bookingNotes = `[Direct Booking] Listed Price: ₹${Number(property.price || 0).toLocaleString('en-IN')} | Final Agreed Price: ₹${Number(finalPrice).toLocaleString('en-IN')} | Advance: ₹${Number(advance).toLocaleString('en-IN')} | Remaining: ₹${Number(remaining).toLocaleString('en-IN')}${body.notes ? ` | Notes: ${clean(body.notes)}` : ''}`;
 
@@ -1319,23 +1340,37 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
     }).catch(() => null);
 
     return {
-      status: 201,
+      status: 200,
       data: {
+        success: true,
         booking: rows[0] || null,
         property_id: propertyId,
         inventory_status: 'BOOKED',
         final_price: finalPrice,
+        final_agreed_price: finalPrice,
         advance,
-        remaining_amount: remaining
+        advance_amount: advance,
+        remaining_amount: remaining,
+        remaining
       }
     };
   }
-  if (req.method === 'PATCH' && section === 'bookings' && id) {
-    const rows = await supabaseAdminGet('bookings', { select: 'id,lead_id,property_id,status,booking_reference,amount,currency,booked_at,confirmed_at,cancelled_at,notes', id: `eq.${id}`, limit: '1' }); const booking = rows[0];
-    const next = clean(body.status).toUpperCase();
+
+  if ((req.method === 'PATCH' || req.method === 'POST') && section === 'bookings' && id) {
+    const subAction = pathParts[4];
+    const rows = await supabaseAdminGet('bookings', { select: 'id,lead_id,property_id,status,booking_reference,amount,currency,booked_at,confirmed_at,cancelled_at,cancellation_reason,notes', id: `eq.${id}`, limit: '1' });
+    const booking = rows[0];
+    if (!booking) return { status: 404, error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' } };
+
+    let next = clean(body.status).toUpperCase();
+    if (subAction === 'cancel' || subAction === 'release') next = 'CANCELLED';
+    else if (subAction === 'complete') next = 'COMPLETED';
+    else if (subAction === 'confirm') next = 'CONFIRMED';
+
     if (!BOOKING_STATUSES.includes(next)) return bad('Invalid booking status.', 'INVALID_BOOKING_STATUS');
     const allowed = { PENDING: ['CONFIRMED','CANCELLED'], CONFIRMED: ['COMPLETED','CANCELLED'], COMPLETED: [], CANCELLED: [] };
     if (booking.status !== next && !allowed[booking.status]?.includes(next)) return bad(`Invalid booking transition: ${booking.status} → ${next}.`, 'INVALID_BOOKING_TRANSITION');
+
     if (next === 'COMPLETED' && booking.property_id) {
       const prop = await propertyById(booking.property_id);
       if (prop && prop.inventory_status !== 'SOLD') {
@@ -1346,16 +1381,20 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
     if (next === 'CANCELLED' && booking.property_id) {
       const property = await propertyById(booking.property_id);
       if (property?.inventory_status === 'BOOKED' || property?.inventory_status === 'RESERVED' || property?.inventory_status === 'HOLD') {
-        const result = await inventoryUpdate(booking.property_id, 'AVAILABLE', 'Booking cancelled / released');
+        const result = await inventoryUpdate(booking.property_id, 'AVAILABLE', clean(body.reason) || 'Booking cancelled / released');
         if (result.status !== 200) return result;
       }
     }
     const update = { status: next, updated_at: new Date().toISOString() };
     if (next === 'CONFIRMED') { update.confirmed_at = new Date().toISOString(); update.booked_at = new Date().toISOString(); }
     if (next === 'COMPLETED') { update.confirmed_at = update.confirmed_at || new Date().toISOString(); }
-    if (next === 'CANCELLED') { update.cancelled_at = new Date().toISOString(); }
+    if (next === 'CANCELLED') {
+      update.cancelled_at = new Date().toISOString();
+      if (body.reason) update.cancellation_reason = clean(body.reason);
+    }
     if (body.notes !== undefined) update.notes = clean(body.notes) || null;
-    const updated = await supabaseAdminPatch('bookings', { id: `eq.${id}`, status: `eq.${booking.status}` }, update); if (!updated[0]) return { status: 409, error: { code: 'BOOKING_CHANGED', message: 'Booking changed before this action completed. Refresh and try again.' } };
+    const updated = await supabaseAdminPatch('bookings', { id: `eq.${id}`, status: `eq.${booking.status}` }, update);
+    if (!updated[0]) return { status: 409, error: { code: 'BOOKING_CHANGED', message: 'Booking changed before this action completed. Refresh and try again.' } };
 
     // When confirmed by owner, dispatch WhatsApp Site Visit Confirmation to customer!
     let confirmationSent = false;

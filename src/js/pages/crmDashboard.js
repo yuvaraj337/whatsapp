@@ -85,13 +85,39 @@ const cls = (v) => 'status-' + String(v || '').toLowerCase().replaceAll('_', '-'
 const date = (v) => (v ? new Date(v).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 const initials = (v) => (String(v || 'VR').split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join('') || 'VR').toUpperCase();
 
+function cleanCustomerNote(raw) {
+  if (!raw) return '-';
+  const str = String(raw).trim();
+  if (!str) return '-';
+
+  const msgMatch = str.match(/(?:Customer Note|Message|Remarks|Note):\s*([^|\n]+)/i);
+  if (msgMatch && msgMatch[1].trim()) {
+    const candidate = msgMatch[1].trim();
+    if (!/^(?:none|nil|na|n\/a|-)$/i.test(candidate)) {
+      return candidate;
+    }
+  }
+
+  let cleaned = str
+    .replace(/\[(?:Website Enquiry|Website Site Visit|Offline Site Visit|Contact Enquiry|Offline|BOOKED|AUTO-CAPTURED[^\]]*)\]/gi, '')
+    .replace(/(?:Project|Property\/Plot|Plot|Type|Area|Price|Unit|Facing|Source|Date|Time|Scheduled|Status|Message ID|Enquiry ID|Booking ID|Reference|Original Interested Property|Booked Property):\s*[^|\n]*/gi, '')
+    .replace(/(?:Message|Remarks|Notes?):\s*/gi, '')
+    .replace(/created from website (?:enquiry|contact) form\.?/gi, '')
+    .replace(/Site visit scheduled for [^|\n]*/gi, '')
+    .replace(/Offline customer for property [^|\n]*/gi, '')
+    .replace(/[|—\-]+/g, ' ')
+    .trim();
+
+  const lines = cleaned.split('\n')
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('http') && !l.includes('wa.me') && !/^(?:none|nil|na|n\/a|-)$/i.test(l));
+
+  const unique = Array.from(new Set(lines)).join(' ').replace(/\s+/g, ' ').trim();
+  return unique || '-';
+}
+
 function cleanEnquiryNotes(raw) {
-  if (!raw) return '—';
-  let str = String(raw);
-  str = str.replace(/\[AUTO-CAPTURED[^\]]*\]/gi, '');
-  str = str.replace(/Enquiry\s+ID\s*:\s*[a-zA-Z0-9_-]+/gi, '');
-  str = str.replace(/\n\s*\n/g, '\n').trim();
-  return str || '—';
+  return cleanCustomerNote(raw);
 }
 
 function parseNumericPrice(val) {
@@ -359,7 +385,7 @@ function overview() {
 
 function enquiries() {
   const q = S.search.toLowerCase();
-  const activeEnqs = S.enquiries.filter((e) => e.status !== 'CANCEL');
+  const activeEnqs = S.enquiries.filter((e) => e.status !== 'CANCEL' && e.status !== 'BOOKED');
   const cancelledEnqs = S.enquiries.filter((e) => e.status === 'CANCEL');
 
   const targetList = S.enquiryFilter === 'cancelled' ? cancelledEnqs : activeEnqs;
@@ -1025,7 +1051,10 @@ function renderPlotDrawerHtml() {
   if (!p) return '';
 
   const status = p.inventory_status || 'AVAILABLE';
-  const b = p.active_booking;
+  const b = p.active_booking || S.bookings.find(
+    (x) => (x.property_id === p.id || x.properties?.property_code === p.property_code) &&
+           (x.status === 'CONFIRMED' || x.status === 'COMPLETED' || x.status === 'BOOKED')
+  );
   const numericPrice = parseNumericPrice(p.price) || 3200000;
 
   return `
@@ -1054,7 +1083,7 @@ function renderPlotDrawerHtml() {
               <strong>${p.area ? `${p.area} ${p.area_unit || 'Sq.Yds'}` : '200 Sq.Yds'}</strong>
             </div>
             <div>
-              <span>Listed Price</span>
+              <span>Current Listed Price</span>
               <strong>${formatIndianCurrency(numericPrice)}</strong>
             </div>
             <div>
@@ -1074,49 +1103,47 @@ function renderPlotDrawerHtml() {
             </div>
           ` : ''}
 
-          <!-- Customer Information Card -->
+          <!-- Customer Information & Complete Financial Breakdown -->
           ${b || status === 'BOOKED' || status === 'HOLD' || status === 'SOLD' ? `
             <div class="crm-drawer-section">
-              <h3>Customer &amp; Financial Details</h3>
+              <h3>Customer &amp; Financial Information</h3>
               <div class="crm-drawer-customer-card">
                 <div class="crm-drawer-customer-row">
                   <span>Customer:</span>
-                  <b>${esc(b?.customer_name || 'Recorded Customer')}</b>
+                  <b>${esc(b?.customer_name || b?.leads?.name || 'Recorded Customer')}</b>
                 </div>
                 <div class="crm-drawer-customer-row">
                   <span>Phone:</span>
                   <b>
-                    <a href="https://wa.me/${String(b?.customer_phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" style="color: #128C7E; font-weight: 700; text-decoration: none;">
-                      ${esc(b?.customer_phone || '—')} 💬
+                    <a href="https://wa.me/${String(b?.customer_phone || b?.leads?.phone || '').replace(/\D/g, '')}" target="_blank" rel="noopener" style="color: #128C7E; font-weight: 700; text-decoration: none;">
+                      ${esc(b?.customer_phone || b?.leads?.phone || '—')} 💬
                     </a>
                   </b>
                 </div>
                 <div class="crm-drawer-customer-row">
                   <span>Email:</span>
-                  <b>${esc(b?.customer_email || '—')}</b>
+                  <b>${esc(b?.customer_email || b?.leads?.email || '—')}</b>
                 </div>
                 <div class="crm-drawer-customer-row">
                   <span>Source:</span>
-                  <b class="crm-badge">${esc(b?.source || 'Offline')}</b>
+                  <b class="crm-badge">${esc(b?.source || b?.leads?.source || 'Offline')}</b>
                 </div>
-                ${b?.final_price ? `
-                  <div class="crm-drawer-customer-row">
-                    <span>Final Agreed Price:</span>
-                    <b style="color: #173f2c; font-weight: 800;">₹${Number(b.final_price).toLocaleString('en-IN')}</b>
-                  </div>
-                ` : ''}
-                ${b?.amount ? `
-                  <div class="crm-drawer-customer-row">
-                    <span>Advance Amount Paid:</span>
-                    <b style="color: #166534; font-weight: 800;">₹${Number(b.amount).toLocaleString('en-IN')}</b>
-                  </div>
-                ` : ''}
-                ${b?.remaining_amount != null ? `
-                  <div class="crm-drawer-customer-row" style="border-top: 1px dashed #cbd5e1; padding-top: 6px;">
-                    <span style="color: #dc2626; font-weight: 700;">Remaining Balance:</span>
-                    <b style="color: #dc2626; font-weight: 800;">₹${Number(b.remaining_amount).toLocaleString('en-IN')}</b>
-                  </div>
-                ` : ''}
+                <div class="crm-drawer-customer-row" style="border-top: 1px dashed #cbd5e1; padding-top: 8px; margin-top: 4px;">
+                  <span>Listed Price at Booking:</span>
+                  <b>${formatIndianCurrency(b?.listed_price || p.price || numericPrice)}</b>
+                </div>
+                <div class="crm-drawer-customer-row">
+                  <span>Final Agreed Price:</span>
+                  <b style="color: #173f2c; font-weight: 800;">${formatIndianCurrency(b?.final_price || numericPrice)}</b>
+                </div>
+                <div class="crm-drawer-customer-row">
+                  <span>Advance Amount Paid:</span>
+                  <b style="color: #166534; font-weight: 800;">${formatIndianCurrency(b?.amount || b?.advance || 0)}</b>
+                </div>
+                <div class="crm-drawer-customer-row" style="border-top: 1px dashed #cbd5e1; padding-top: 6px;">
+                  <span style="color: #dc2626; font-weight: 700;">Remaining Balance:</span>
+                  <b style="color: #dc2626; font-weight: 800;">${formatIndianCurrency(b?.remaining_amount != null ? b.remaining_amount : Math.max(0, (b?.final_price || numericPrice) - (b?.amount || 0)))}</b>
+                </div>
                 ${b?.booked_at ? `
                   <div class="crm-drawer-customer-row">
                     <span>Booking Date:</span>
@@ -1431,7 +1458,7 @@ function reminders() {
         <div style="padding: 24px; background: #F0FDF4; border-radius: 0 0 16px 16px;">
           <div style="background: #FFFFFF; border: 1px solid #DCFCE7; border-radius: 12px; padding: 16px; font-size: 0.9rem; line-height: 1.6; color: #1F2937; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
             <div style="font-weight: 700; color: #166534; margin-bottom: 8px;">Real Estate Brothers group — Site Visit Reminder 📍</div>
-            <p style="margin: 0 0 8px;">Hello <strong>Ramesh Varma</strong>,</p>
+            <p style="margin: 0 0 8px;">Hello <strong>Rahul Kumar</strong>,</p>
             <p style="margin: 0 0 8px;">This is a quick reminder of your upcoming site visit to <strong>Amodha Open Plots, Shadnagar</strong> scheduled for <strong>Tomorrow, 11:00 AM</strong>.</p>
             <p style="margin: 0 0 8px;">Our site coordinator, Mr. Suresh, will welcome you at the entrance arch.</p>
             <p style="margin: 0; font-size: 0.82rem; color: #4B5563;">Need pickup or rescheduling? Reply directly to this WhatsApp message.</p>
@@ -1731,87 +1758,300 @@ function modal(html) {
   document.querySelectorAll('[data-close]').forEach((x) => (x.onclick = () => document.getElementById('crm-modal')?.remove()));
 }
 
-function enquiryBookingModal(enquiryId) {
-  const enq = S.enquiries.find((x) => x.id === enquiryId);
-  if (!enq) return;
+function getProjectProperties(projSlug) {
+  return S.inventory.filter((p) => {
+    const slug = p.projects?.slug || '';
+    if (slug) return slug === projSlug;
+    const name = String(p.projects?.name || '').toLowerCase();
+    const code = String(p.property_code || '').toUpperCase();
+    if (projSlug === 'vr-green-meadows') {
+      return name.includes('meadow') || name.includes('plot') || code.startsWith('P') || (!isNaN(code) && !code.startsWith('V') && !code.startsWith('A') && !code.startsWith('F'));
+    }
+    if (projSlug === 'vr-luxury-villas') {
+      return name.includes('villa') || code.startsWith('V');
+    }
+    if (projSlug === 'vr-elite-towers') {
+      return name.includes('tower') || name.includes('apart') || code.startsWith('A-') || code.startsWith('B-');
+    }
+    if (projSlug === 'vr-agro-lands') {
+      return name.includes('agro') || name.includes('farm') || code.startsWith('F-');
+    }
+    return false;
+  });
+}
 
-  const availableProps = S.inventory.filter((x) => x.inventory_status === 'AVAILABLE' || x.id === enq.property_id);
-  const preselected = availableProps.find((x) => x.id === enq.property_id || (enq.property && x.property_code === enq.property)) || availableProps[0];
-  const defaultListedPrice = preselected ? (parseNumericPrice(preselected.price) || 3200000) : 3200000;
-  const defaultAdvance = 100000;
+function openBookingModal({ mode = 'offline', enquiryId = null, visitId = null, propertyId = null } = {}) {
+  let customerName = '';
+  let customerPhone = '';
+  let customerEmail = '';
+  let customerNote = '';
+  let initialPropertyId = propertyId || '';
+  let initialPropertyCode = '';
+  let initialProjectSlug = 'vr-green-meadows';
+
+  let enq = null;
+  let visit = null;
+
+  if (mode === 'enquiry' && enquiryId) {
+    enq = S.enquiries.find((x) => x.id === enquiryId);
+    if (enq) {
+      customerName = enq.name || '';
+      customerPhone = enq.phone || '';
+      customerEmail = enq.email || '';
+      customerNote = cleanCustomerNote(enq.notes);
+      initialPropertyId = enq.property_id || '';
+      initialPropertyCode = enq.property || '';
+      const pMatch = S.inventory.find((x) => x.id === initialPropertyId || (initialPropertyCode && x.property_code === initialPropertyCode));
+      if (pMatch?.projects?.slug) initialProjectSlug = pMatch.projects.slug;
+      else if (enq.project) {
+        const found = CRM_PROJECTS.find((p) => enq.project.toLowerCase().includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(enq.project.toLowerCase()));
+        if (found) initialProjectSlug = found.slug;
+      }
+    }
+  } else if (mode === 'visit' && visitId) {
+    visit = S.visits.find((x) => x.id === visitId);
+    if (visit) {
+      customerName = visit.leads?.name || '';
+      customerPhone = visit.leads?.phone || '';
+      customerEmail = visit.leads?.email || '';
+      customerNote = cleanCustomerNote(visit.notes);
+      initialPropertyId = visit.property_id || '';
+      initialPropertyCode = visit.properties?.property_code || '';
+      if (visit.properties?.projects?.slug) {
+        initialProjectSlug = visit.properties.projects.slug;
+      }
+    }
+  } else if (propertyId) {
+    const pMatch = S.inventory.find((x) => x.id === propertyId || x.property_code === propertyId);
+    if (pMatch) {
+      initialPropertyId = pMatch.id;
+      initialPropertyCode = pMatch.property_code;
+      if (pMatch.projects?.slug) initialProjectSlug = pMatch.projects.slug;
+    }
+  }
+
+  const modalTitle = mode === 'enquiry'
+    ? `Book Property for ${esc(customerName || 'Customer')}`
+    : mode === 'visit'
+    ? `Book Property from Site Visit`
+    : `+ Record Property Booking`;
+
+  const modalSubtitle = mode === 'enquiry'
+    ? `Converts this website enquiry into a confirmed booking. Selected plot marks BOOKED and website updates instantly.`
+    : mode === 'visit'
+    ? `Customer decided to purchase after site visit! Confirms booking, updates plot to BOOKED, and syncs website.`
+    : `Direct customer booking. Instantly updates inventory and synchronizes with the public master plan.`;
 
   modal(`
     <button class="crm-modal-close" data-close>×</button>
-    <div class="crm-eyebrow">CONFIRM ENQUIRY BOOKING</div>
-    <h2>Book Plot for ${esc(enq.name)}</h2>
+    <div class="crm-eyebrow">CONFIRMED TRANSACTION RECORD</div>
+    <h2>${modalTitle}</h2>
     <p style="color: #6b7280; font-size: 12px; margin-top: -6px; margin-bottom: 14px;">
-      Converting this enquiry to BOOKED creates a confirmed booking, marks the plot BOOKED, and synchronizes the public website.
+      ${modalSubtitle}
     </p>
-    <form id="enquiry-book-form" class="crm-form">
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; font-size: 12px; display: grid; gap: 4px;">
-        <div><strong>Customer:</strong> ${esc(enq.name)}</div>
-        <div><strong>Phone:</strong> ${esc(enq.phone)}</div>
-        <div><strong>Email:</strong> ${esc(enq.email || '—')}</div>
-        <div><strong>Customer Note:</strong> ${esc(cleanEnquiryNotes(enq.notes))}</div>
-      </div>
-      <label>Select Plot / Property to Book *
-        <select name="property_id" id="enq-property-select" required>
-          ${availableProps.map((p) => {
-            const numP = parseNumericPrice(p.price);
-            const isSel = p.id === preselected?.id;
-            return `
-              <option value="${p.id}" data-price="${numP}" ${isSel ? 'selected' : ''}>
-                ${esc(p.property_code)} · ${esc(p.title || p.projects?.name || 'Unit')} — ${formatIndianCurrency(numP || p.price)}
-              </option>
-            `;
-          }).join('')}
-        </select>
-      </label>
 
-      <div class="crm-price-summary-box">
-        <div class="crm-calc-row">
-          <span>Official Listed Price:</span>
-          <strong id="display-listed-price">${formatIndianCurrency(defaultListedPrice)}</strong>
-          <input type="hidden" name="listed_price" id="input-listed-price" value="${defaultListedPrice}">
+    <form id="crm-unified-booking-form" class="crm-form">
+      <!-- SECTION 1: CUSTOMER INFORMATION -->
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; display: grid; gap: 8px;">
+        <div style="font-size: 11px; font-weight: 800; color: #173f2c; text-transform: uppercase; letter-spacing: 0.5px;">
+          Section 1 · Customer Details
+        </div>
+        ${(mode === 'enquiry' || mode === 'visit') ? `
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
+            <div><span style="color: #64748b;">Customer:</span> <b>${esc(customerName || '—')}</b></div>
+            <div><span style="color: #64748b;">Phone:</span> <b>${esc(customerPhone || '—')}</b></div>
+            <div><span style="color: #64748b;">Email:</span> <b>${esc(customerEmail || '—')}</b></div>
+            <div><span style="color: #64748b;">Customer Note:</span> <b>${esc(customerNote || '-')}</b></div>
+          </div>
+          <input type="hidden" name="customer_name" value="${esc(customerName)}">
+          <input type="hidden" name="customer_phone" value="${esc(customerPhone)}">
+          <input type="hidden" name="customer_email" value="${esc(customerEmail)}">
+        ` : `
+          <div style="display: grid; gap: 10px;">
+            <label>Customer Full Name *
+              <input name="customer_name" id="modal-cust-name" required placeholder="e.g. Rahul Kumar">
+            </label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <label>Mobile Number (WhatsApp) *
+                <input name="customer_phone" id="modal-cust-phone" type="tel" required placeholder="10-digit mobile number" maxlength="10">
+              </label>
+              <label>Email Address
+                <input name="customer_email" id="modal-cust-email" type="email" placeholder="name@example.com">
+              </label>
+            </div>
+          </div>
+        `}
+      </div>
+
+      <!-- SECTION 2: PROPERTY SELECTION (PROJECT -> PROPERTY/PLOT) -->
+      <div style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 14px; display: grid; gap: 10px;">
+        <div style="font-size: 11px; font-weight: 800; color: #173f2c; text-transform: uppercase; letter-spacing: 0.5px;">
+          Section 2 · Property Selection (Project ↓ Plot)
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <label>Project / Venture *
+            <select name="project_slug" id="modal-project-select" required>
+              ${CRM_PROJECTS.map((p) => `
+                <option value="${p.slug}" ${p.slug === initialProjectSlug ? 'selected' : ''}>${p.name}</option>
+              `).join('')}
+            </select>
+          </label>
+
+          <label>Plot / Property *
+            <select name="property_id" id="modal-property-select" required>
+              <!-- Populated dynamically based on project -->
+            </select>
+          </label>
         </div>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-        <label>Final Agreed Price (₹) *
-          <input name="final_price" id="input-final-price" type="number" required value="${defaultListedPrice}">
-        </label>
-        <label>Advance Amount (₹) *
-          <input name="advance" id="input-advance" type="number" required value="${defaultAdvance}" placeholder="e.g. 100000">
-        </label>
-      </div>
-
-      <div class="crm-price-summary-box">
-        <div class="crm-calc-row highlight due">
-          <span>Remaining Balance Due:</span>
-          <strong id="calc-remaining-amount">${formatIndianCurrency(Math.max(0, defaultListedPrice - defaultAdvance))}</strong>
-          <input type="hidden" name="remaining_amount" id="input-remaining-amount" value="${Math.max(0, defaultListedPrice - defaultAdvance)}">
+      <!-- SECTION 3: PROPERTY INFORMATION -->
+      <div id="modal-property-info-section" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px;">
+        <div style="font-size: 11px; font-weight: 800; color: #166534; text-transform: uppercase; letter-spacing: 0.5px;">
+          Section 3 · Selected Property Details
+        </div>
+        <div id="modal-prop-details-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; font-size: 12px;">
+          <div><span style="color: #64748b; font-size: 11px;">Property:</span> <b id="prop-info-code">—</b></div>
+          <div><span style="color: #64748b; font-size: 11px;">Area:</span> <b id="prop-info-area">—</b></div>
+          <div><span style="color: #64748b; font-size: 11px;">Facing:</span> <b id="prop-info-facing">—</b></div>
+          <div><span style="color: #64748b; font-size: 11px;">Status:</span> <b id="prop-info-status" class="crm-badge status-available">AVAILABLE</b></div>
         </div>
       </div>
 
-      <label>Booking Notes / Terms (Optional)
-        <textarea name="notes" rows="2" placeholder="Payment reference or remarks"></textarea>
-      </label>
-      <div class="crm-modal-actions">
+      <!-- SECTION 4: FINANCIAL AGREEMENT -->
+      <div style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 14px; display: grid; gap: 12px;">
+        <div style="font-size: 11px; font-weight: 800; color: #173f2c; text-transform: uppercase; letter-spacing: 0.5px;">
+          Section 4 · Financial Agreement
+        </div>
+
+        <div class="crm-price-summary-box">
+          <div class="crm-calc-row">
+            <span>Official Listed Price:</span>
+            <strong id="modal-display-listed">₹0</strong>
+            <input type="hidden" name="listed_price" id="modal-input-listed" value="0">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <label>Final Agreed Price (₹) *
+            <input name="final_price" id="modal-input-final" type="number" required min="1" placeholder="e.g. 3200000">
+          </label>
+          <label>Advance Amount (₹) *
+            <input name="advance" id="modal-input-advance" type="number" required min="0" placeholder="e.g. 100000">
+          </label>
+        </div>
+
+        <div class="crm-price-summary-box">
+          <div class="crm-calc-row highlight due">
+            <span style="font-weight: 700; color: #dc2626;">Remaining Balance Due:</span>
+            <strong id="modal-display-remaining" style="font-size: 14px; color: #dc2626; font-weight: 800;">₹0</strong>
+            <input type="hidden" name="remaining_amount" id="modal-input-remaining" value="0">
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 5: BOOKING NOTES -->
+      <div style="display: grid; gap: 6px;">
+        <label>Section 5 · Booking Notes / Remarks (Optional)
+          <textarea name="notes" id="modal-booking-notes" rows="2" placeholder="Payment receipt, cheque no, special terms, etc."></textarea>
+        </label>
+      </div>
+
+      <!-- SECTION 6: CONFIRMATION ACTIONS -->
+      <div class="crm-modal-actions" style="margin-top: 8px;">
         <button type="button" class="crm-small-btn" data-close>Cancel</button>
-        <button class="crm-primary" style="background:#15803d; border-color:#15803d;">Confirm Booking &amp; Update Website</button>
+        <button type="submit" class="crm-primary" id="modal-confirm-btn" style="background:#15803d; border-color:#15803d; padding: 10px 18px; font-weight: 700;">
+          Confirm Booking &amp; Update Website
+        </button>
       </div>
     </form>
   `);
 
-  const propSelect = document.getElementById('enq-property-select');
-  const dispListed = document.getElementById('display-listed-price');
-  const inListed = document.getElementById('input-listed-price');
-  const inFinal = document.getElementById('input-final-price');
-  const inAdvance = document.getElementById('input-advance');
-  const dispRemain = document.getElementById('calc-remaining-amount');
-  const inRemain = document.getElementById('input-remaining-amount');
+  const projSelect = document.getElementById('modal-project-select');
+  const propSelect = document.getElementById('modal-property-select');
+  const dispListed = document.getElementById('modal-display-listed');
+  const inListed = document.getElementById('modal-input-listed');
+  const inFinal = document.getElementById('modal-input-final');
+  const inAdvance = document.getElementById('modal-input-advance');
+  const dispRemain = document.getElementById('modal-display-remaining');
+  const inRemain = document.getElementById('modal-input-remaining');
 
-  function updatePrices() {
+  const infoCode = document.getElementById('prop-info-code');
+  const infoArea = document.getElementById('prop-info-area');
+  const infoFacing = document.getElementById('prop-info-facing');
+  const infoStatus = document.getElementById('prop-info-status');
+
+  function updatePropertiesDropdown(selectedProjSlug, keepPropId = null) {
+    const props = getProjectProperties(selectedProjSlug);
+    propSelect.innerHTML = '';
+
+    if (!props.length) {
+      propSelect.innerHTML = '<option value="">No properties in this project</option>';
+      updateSelectedPropertyDetails(null);
+      return;
+    }
+
+    props.sort((a, b) => (a.property_code || '').localeCompare(b.property_code || '', undefined, { numeric: true }));
+
+    props.forEach((p) => {
+      const isCurrentlySelected = (keepPropId && (p.id === keepPropId || p.property_code === keepPropId));
+      const isAvailable = p.inventory_status === 'AVAILABLE' || p.inventory_status === 'HOLD' || p.inventory_status === 'RESERVED' || isCurrentlySelected;
+      const numPrice = parseNumericPrice(p.price);
+
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.dataset.price = numPrice;
+      opt.dataset.code = p.property_code || '';
+      opt.dataset.area = p.area ? `${p.area} ${p.area_unit || 'Sq.Yds'}` : '200 Sq.Yds';
+      opt.dataset.facing = p.facing || 'East';
+      opt.dataset.status = p.inventory_status || 'AVAILABLE';
+
+      if (!isAvailable) {
+        opt.disabled = true;
+        opt.textContent = `${p.property_code} · ${p.title || 'Unit'} — [${p.inventory_status} - Unavailable]`;
+      } else {
+        opt.textContent = `${p.property_code} · ${p.title || 'Unit'} — ${formatIndianCurrency(numPrice)} [${p.inventory_status}]`;
+      }
+
+      propSelect.appendChild(opt);
+    });
+
+    let target = props.find((p) => keepPropId && (p.id === keepPropId || p.property_code === keepPropId));
+    if (!target) target = props.find((p) => p.inventory_status === 'AVAILABLE' || p.inventory_status === 'HOLD' || p.inventory_status === 'RESERVED') || props[0];
+
+    if (target) {
+      propSelect.value = target.id;
+      updateSelectedPropertyDetails(target);
+    }
+  }
+
+  function updateSelectedPropertyDetails(prop) {
+    if (!prop) {
+      infoCode.textContent = '—';
+      infoArea.textContent = '—';
+      infoFacing.textContent = '—';
+      infoStatus.textContent = '—';
+      dispListed.textContent = '₹0';
+      inListed.value = 0;
+      inFinal.value = 0;
+      updateCalculations();
+      return;
+    }
+
+    const numPrice = parseNumericPrice(prop.price) || 3200000;
+    infoCode.textContent = prop.property_code || prop.title || 'Unit';
+    infoArea.textContent = prop.area ? `${prop.area} ${prop.area_unit || 'Sq.Yds'}` : '200 Sq.Yds';
+    infoFacing.textContent = prop.facing || (prop.property_code <= 'P06' ? 'East' : prop.property_code <= 'P12' ? 'West' : 'North');
+    infoStatus.textContent = prop.inventory_status || 'AVAILABLE';
+    infoStatus.className = `crm-badge ${cls(prop.inventory_status || 'AVAILABLE')}`;
+
+    dispListed.textContent = formatIndianCurrency(numPrice);
+    inListed.value = numPrice;
+    inFinal.value = numPrice;
+    updateCalculations();
+  }
+
+  function updateCalculations() {
     const finalVal = parseFloat(inFinal.value) || 0;
     const advVal = parseFloat(inAdvance.value) || 0;
     const remaining = Math.max(0, finalVal - advVal);
@@ -1819,51 +2059,110 @@ function enquiryBookingModal(enquiryId) {
     inRemain.value = remaining;
   }
 
-  propSelect?.addEventListener('change', () => {
-    const opt = propSelect.selectedOptions[0];
-    const pPrice = parseFloat(opt?.dataset?.price) || defaultListedPrice;
-    dispListed.textContent = formatIndianCurrency(pPrice);
-    inListed.value = pPrice;
-    inFinal.value = pPrice;
-    updatePrices();
+  projSelect.addEventListener('change', () => {
+    updatePropertiesDropdown(projSelect.value);
   });
 
-  inFinal?.addEventListener('input', updatePrices);
-  inAdvance?.addEventListener('input', updatePrices);
+  propSelect.addEventListener('change', () => {
+    const opt = propSelect.selectedOptions[0];
+    const p = S.inventory.find((x) => x.id === opt?.value);
+    updateSelectedPropertyDetails(p);
+  });
 
-  document.getElementById('enquiry-book-form').onsubmit = async (e) => {
+  inFinal.addEventListener('input', updateCalculations);
+  inAdvance.addEventListener('input', updateCalculations);
+
+  updatePropertiesDropdown(initialProjectSlug, initialPropertyId || initialPropertyCode);
+
+  document.getElementById('crm-unified-booking-form').onsubmit = async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target));
     const finalPrice = parseFloat(data.final_price) || 0;
     const advance = parseFloat(data.advance) || 0;
+
+    if (finalPrice <= 0) {
+      showToast('Please enter a valid final agreed price.', true);
+      return;
+    }
+    if (advance < 0) {
+      showToast('Advance amount cannot be negative.', true);
+      return;
+    }
+    if (advance > finalPrice) {
+      showToast('Advance amount cannot exceed final agreed price.', true);
+      return;
+    }
+
     const remaining = Math.max(0, finalPrice - advance);
+    const selectedProp = S.inventory.find((x) => x.id === data.property_id);
+    const propCode = selectedProp?.property_code || data.property_id;
 
     try {
-      await api(`/api/crm/enquiries/${enquiryId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          status: 'BOOKED',
-          property_id: data.property_id,
-          final_price: finalPrice,
-          advance: advance,
-          remaining_amount: remaining,
-          amount: advance,
-          notes: data.notes
-        })
-      });
-      const bookedProp = S.inventory.find((x) => x.id === data.property_id);
-      if (bookedProp) {
-        syncPlotOverride(bookedProp.property_code, 'BOOKED');
-        syncPlotOverride(bookedProp.id, 'BOOKED');
+      if (mode === 'enquiry' && enquiryId) {
+        await api(`/api/crm/enquiries/${enquiryId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            status: 'BOOKED',
+            property_id: data.property_id,
+            final_price: finalPrice,
+            advance: advance,
+            remaining_amount: remaining,
+            amount: advance,
+            notes: data.notes
+          })
+        });
+        showToast(`Enquiry successfully confirmed as BOOKED for ${propCode}! Website synced.`);
+      } else if (mode === 'visit' && visitId) {
+        await api(`/api/crm/site-visits/${visitId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            status: 'BOOKED',
+            property_id: data.property_id,
+            final_price: finalPrice,
+            advance: advance,
+            remaining_amount: remaining,
+            amount: advance,
+            notes: data.notes
+          })
+        });
+        showToast(`Site visit converted to BOOKED for ${propCode}! Website synced.`);
+      } else {
+        if (!data.customer_name || !data.customer_phone) {
+          showToast('Customer name and mobile number are required.', true);
+          return;
+        }
+        await api('/api/crm/offline-booking', {
+          method: 'POST',
+          body: JSON.stringify({
+            customer_name: data.customer_name,
+            customer_phone: data.customer_phone,
+            customer_email: data.customer_email,
+            property_id: data.property_id,
+            status: 'BOOKED',
+            final_price: finalPrice,
+            advance: advance,
+            remaining_amount: remaining,
+            amount: advance,
+            notes: data.notes
+          })
+        });
+        showToast(`Plot ${propCode} booked for ${data.customer_name}! Website synced.`);
       }
+
+      if (selectedProp?.property_code) syncPlotOverride(selectedProp.property_code, 'BOOKED');
+      if (selectedProp?.id) syncPlotOverride(selectedProp.id, 'BOOKED');
+
       document.getElementById('crm-modal')?.remove();
-      showToast(`Enquiry confirmed as BOOKED! Plot marked unavailable and website synced.`);
       await load();
       render();
     } catch (err) {
       showToast(err.message, true);
     }
   };
+}
+
+function enquiryBookingModal(enquiryId) {
+  return openBookingModal({ mode: 'enquiry', enquiryId });
 }
 
 async function cancelEnquiry(enquiryId) {
@@ -1911,38 +2210,35 @@ async function archiveEnquiry(enquiryId) {
 }
 
 function addSiteVisitModal() {
-  const availableProps = S.inventory.filter((x) => x.inventory_status === 'AVAILABLE' || x.inventory_status === 'RESERVED');
   modal(`
     <button class="crm-modal-close" data-close>×</button>
-    <div class="crm-eyebrow">OFFLINE SITE VISIT</div>
+    <div class="crm-eyebrow">OFFLINE SITE VISIT APPOINTMENT</div>
     <h2>+ Add Site Visit</h2>
     <p style="color: #6b7280; font-size: 12px; margin-top: -6px; margin-bottom: 14px;">
       Log an offline customer visit appointment. (Plot remains AVAILABLE).
     </p>
     <form id="offline-visit-form" class="crm-form">
       <label>Customer Name *
-        <input name="customer_name" required placeholder="e.g. Ramesh Varma">
+        <input name="customer_name" required placeholder="e.g. Rahul Kumar">
       </label>
       <label>Phone Number *
         <input name="customer_phone" type="tel" required placeholder="10-digit mobile number" maxlength="10">
       </label>
       <label>Email Address
-        <input name="customer_email" type="email" placeholder="customer@example.com">
+        <input name="customer_email" type="email" placeholder="name@example.com">
       </label>
-      <label>Project / Venture
-        <select name="project_name">
-          ${CRM_PROJECTS.map((p) => `<option value="${p.name}">${p.name}</option>`).join('')}
-        </select>
-      </label>
-      <label>Plot / Property *
-        <select name="property_id" required>
-          ${availableProps.map((p) => `
-            <option value="${p.id}">
-              ${esc(p.property_code)} · ${esc(p.title || p.projects?.name || 'Unit')} (${p.inventory_status})
-            </option>
-          `).join('')}
-        </select>
-      </label>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <label>Project / Venture *
+          <select name="project_slug" id="visit-modal-project" required>
+            ${CRM_PROJECTS.map((p) => `<option value="${p.slug}">${p.name}</option>`).join('')}
+          </select>
+        </label>
+        <label>Plot / Property *
+          <select name="property_id" id="visit-modal-property" required>
+            <!-- Populated dynamically based on project -->
+          </select>
+        </label>
+      </div>
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
         <label>Visit Date *
           <input name="visit_date" type="date" required value="${new Date().toISOString().split('T')[0]}">
@@ -1957,8 +2253,8 @@ function addSiteVisitModal() {
           <option value="CONFIRMED">CONFIRMED (Send WhatsApp confirmation)</option>
         </select>
       </label>
-      <label>Notes
-        <textarea name="notes" rows="2" placeholder="Customer requirements, pickup point, etc."></textarea>
+      <label>Customer Notes
+        <textarea name="notes" rows="2" placeholder="How can we help you?"></textarea>
       </label>
       <input type="hidden" name="source" value="Offline" />
       <div class="crm-modal-actions">
@@ -1967,6 +2263,23 @@ function addSiteVisitModal() {
       </div>
     </form>
   `);
+
+  const vProj = document.getElementById('visit-modal-project');
+  const vProp = document.getElementById('visit-modal-property');
+
+  function updateVisitProps(slug) {
+    const props = getProjectProperties(slug);
+    vProp.innerHTML = '';
+    props.forEach((p) => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = `${p.property_code} · ${p.title || 'Unit'} (${p.inventory_status})`;
+      vProp.appendChild(opt);
+    });
+  }
+
+  vProj?.addEventListener('change', () => updateVisitProps(vProj.value));
+  updateVisitProps(vProj?.value || 'vr-green-meadows');
 
   document.getElementById('offline-visit-form').onsubmit = async (e) => {
     e.preventDefault();
@@ -1997,247 +2310,11 @@ function addSiteVisitModal() {
 }
 
 function visitBookingModal(visitId) {
-  const v = S.visits.find((x) => x.id === visitId);
-  if (!v) return;
-  const prop = v.properties;
-  const lead = v.leads;
-  const defaultListedPrice = parseNumericPrice(prop?.price) || 3200000;
-  const defaultAdvance = 100000;
-
-  modal(`
-    <button class="crm-modal-close" data-close>×</button>
-    <div class="crm-eyebrow">CONVERT SITE VISIT TO BOOKED</div>
-    <h2>Book Plot ${esc(prop?.property_code || '')}</h2>
-    <p style="color: #6b7280; font-size: 12px; margin-top: -6px; margin-bottom: 14px;">
-      Customer decided to purchase! This creates a confirmed booking, updates plot to BOOKED, and syncs website.
-    </p>
-    <form id="visit-book-form" class="crm-form">
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; font-size: 12px; display: grid; gap: 4px;">
-        <div><strong>Customer:</strong> ${esc(lead?.name || 'Visitor')}</div>
-        <div><strong>Phone:</strong> ${esc(lead?.phone || '—')}</div>
-        <div><strong>Property:</strong> Plot ${esc(prop?.property_code || '—')} (${esc(prop?.projects?.name || 'VR Green Meadows')})</div>
-      </div>
-
-      <div class="crm-price-summary-box">
-        <div class="crm-calc-row">
-          <span>Official Listed Price:</span>
-          <strong>${formatIndianCurrency(defaultListedPrice)}</strong>
-        </div>
-      </div>
-
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-        <label>Final Agreed Price (₹) *
-          <input name="final_price" id="v-final-price" type="number" required value="${defaultListedPrice}">
-        </label>
-        <label>Advance Amount Received (₹) *
-          <input name="advance" id="v-advance" type="number" required value="${defaultAdvance}" placeholder="e.g. 100000">
-        </label>
-      </div>
-
-      <div class="crm-price-summary-box">
-        <div class="crm-calc-row highlight due">
-          <span>Remaining Balance Due:</span>
-          <strong id="v-calc-remaining">${formatIndianCurrency(Math.max(0, defaultListedPrice - defaultAdvance))}</strong>
-          <input type="hidden" name="remaining_amount" id="v-input-remaining" value="${Math.max(0, defaultListedPrice - defaultAdvance)}">
-        </div>
-      </div>
-
-      <label>Booking Notes
-        <textarea name="notes" rows="2" placeholder="Payment receipt, terms agreed, etc."></textarea>
-      </label>
-      <div class="crm-modal-actions">
-        <button type="button" class="crm-small-btn" data-close>Cancel</button>
-        <button class="crm-primary" style="background:#15803d; border-color:#15803d;">Confirm Booking &amp; Update Website</button>
-      </div>
-    </form>
-  `);
-
-  const inFinal = document.getElementById('v-final-price');
-  const inAdvance = document.getElementById('v-advance');
-  const dispRemain = document.getElementById('v-calc-remaining');
-  const inRemain = document.getElementById('v-input-remaining');
-
-  function updatePrices() {
-    const finalVal = parseFloat(inFinal.value) || 0;
-    const advVal = parseFloat(inAdvance.value) || 0;
-    const remaining = Math.max(0, finalVal - advVal);
-    dispRemain.textContent = formatIndianCurrency(remaining);
-    inRemain.value = remaining;
-  }
-
-  inFinal?.addEventListener('input', updatePrices);
-  inAdvance?.addEventListener('input', updatePrices);
-
-  document.getElementById('visit-book-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const data = Object.fromEntries(new FormData(e.target));
-    const finalPrice = parseFloat(data.final_price) || 0;
-    const advance = parseFloat(data.advance) || 0;
-    const remaining = Math.max(0, finalPrice - advance);
-
-    try {
-      await api(`/api/crm/site-visits/${visitId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          status: 'BOOKED',
-          final_price: finalPrice,
-          advance: advance,
-          remaining_amount: remaining,
-          amount: advance,
-          notes: data.notes
-        })
-      });
-      if (prop?.property_code) syncPlotOverride(prop.property_code, 'BOOKED');
-      if (v.property_id) syncPlotOverride(v.property_id, 'BOOKED');
-      document.getElementById('crm-modal')?.remove();
-      showToast(`Site visit converted to BOOKED! Plot marked unavailable and website synced.`);
-      await load();
-      render();
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  };
+  return openBookingModal({ mode: 'visit', visitId });
 }
 
 function offlineBookingModal(preselectedPropertyId = '') {
-  const availableProps = S.inventory.filter((x) => x.inventory_status === 'AVAILABLE' || x.inventory_status === 'HOLD' || x.id === preselectedPropertyId);
-  const preselected = availableProps.find((x) => x.id === preselectedPropertyId) || availableProps[0];
-  const defaultListedPrice = preselected ? (parseNumericPrice(preselected.price) || 3200000) : 3200000;
-  const defaultAdvance = 100000;
-
-  modal(`
-    <button class="crm-modal-close" data-close>×</button>
-    <div class="crm-eyebrow">OFFLINE CUSTOMER BOOKING</div>
-    <h2>Record Plot / Unit Booking</h2>
-    <p style="color: #6B7280; font-size: 0.88rem; margin-top: -8px; margin-bottom: 16px;">
-      Direct customer booking. Instantly updates inventory and synchronizes with the public master plan.
-    </p>
-    <form id="offline-booking-form" class="crm-form">
-      <label>Customer Full Name *
-        <input name="customer_name" required placeholder="e.g. Ramesh Varma" />
-      </label>
-      <label>Mobile Number (WhatsApp) *
-        <input name="customer_phone" type="tel" required placeholder="e.g. 9876543210" maxlength="10" />
-      </label>
-      <label>Email Address (Optional)
-        <input name="customer_email" type="email" placeholder="customer@example.com" />
-      </label>
-      <label>Select Property / Plot *
-        <select name="property_id" id="off-property-select" required>
-          ${availableProps.map((p) => {
-            const numP = parseNumericPrice(p.price);
-            const isSel = p.id === (preselected?.id);
-            return `
-              <option value="${p.id}" data-price="${numP}" ${isSel ? 'selected' : ''}>
-                ${esc(p.property_code)} · ${esc(p.title || p.projects?.name || 'Unit')} (${p.inventory_status}) — ${formatIndianCurrency(numP || p.price)}
-              </option>
-            `;
-          }).join('')}
-        </select>
-      </label>
-      <label>Booking Status *
-        <select name="status">
-          <option value="BOOKED" selected>BOOKED (Confirmed Plot Booking)</option>
-          <option value="HOLD">HOLD (Owner Manual Hold - No Auto Expiry)</option>
-          <option value="SOLD">SOLD (Full Settlement Done)</option>
-          <option value="BLOCKED">BLOCKED (Admin Restricted)</option>
-        </select>
-      </label>
-
-      <div class="crm-price-summary-box">
-        <div class="crm-calc-row">
-          <span>Official Listed Price:</span>
-          <strong id="off-display-listed">${formatIndianCurrency(defaultListedPrice)}</strong>
-          <input type="hidden" name="listed_price" id="off-input-listed" value="${defaultListedPrice}">
-        </div>
-      </div>
-
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-        <label>Final Agreed Price (₹) *
-          <input name="final_price" id="off-final-price" type="number" required value="${defaultListedPrice}">
-        </label>
-        <label>Advance Amount Received (₹) *
-          <input name="advance" id="off-advance" type="number" required value="${defaultAdvance}" placeholder="e.g. 100000">
-        </label>
-      </div>
-
-      <div class="crm-price-summary-box">
-        <div class="crm-calc-row highlight due">
-          <span>Remaining Balance Due:</span>
-          <strong id="off-calc-remaining">${formatIndianCurrency(Math.max(0, defaultListedPrice - defaultAdvance))}</strong>
-          <input type="hidden" name="remaining_amount" id="off-input-remaining" value="${Math.max(0, defaultListedPrice - defaultAdvance)}">
-        </div>
-      </div>
-
-      <label>Booking Notes / Cheque / Transaction Details
-        <textarea name="notes" rows="2" placeholder="Payment receipt no, branch walk-in, etc."></textarea>
-      </label>
-      <div class="crm-modal-actions">
-        <button type="button" class="crm-small-btn" data-close>Cancel</button>
-        <button class="crm-primary">Save &amp; Update Inventory</button>
-      </div>
-    </form>
-  `);
-
-  const propSelect = document.getElementById('off-property-select');
-  const dispListed = document.getElementById('off-display-listed');
-  const inListed = document.getElementById('off-input-listed');
-  const inFinal = document.getElementById('off-final-price');
-  const inAdvance = document.getElementById('off-advance');
-  const dispRemain = document.getElementById('off-calc-remaining');
-  const inRemain = document.getElementById('off-input-remaining');
-
-  function updatePrices() {
-    const finalVal = parseFloat(inFinal.value) || 0;
-    const advVal = parseFloat(inAdvance.value) || 0;
-    const remaining = Math.max(0, finalVal - advVal);
-    dispRemain.textContent = formatIndianCurrency(remaining);
-    inRemain.value = remaining;
-  }
-
-  propSelect?.addEventListener('change', () => {
-    const opt = propSelect.selectedOptions[0];
-    const pPrice = parseFloat(opt?.dataset?.price) || defaultListedPrice;
-    dispListed.textContent = formatIndianCurrency(pPrice);
-    inListed.value = pPrice;
-    inFinal.value = pPrice;
-    updatePrices();
-  });
-
-  inFinal?.addEventListener('input', updatePrices);
-  inAdvance?.addEventListener('input', updatePrices);
-
-  document.getElementById('offline-booking-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const data = Object.fromEntries(new FormData(e.target));
-    const finalPrice = parseFloat(data.final_price) || 0;
-    const advance = parseFloat(data.advance) || 0;
-    const remaining = Math.max(0, finalPrice - advance);
-
-    try {
-      await api('/api/crm/offline-booking', {
-        method: 'POST',
-        body: JSON.stringify({
-          ...data,
-          final_price: finalPrice,
-          advance: advance,
-          remaining_amount: remaining,
-          amount: advance
-        })
-      });
-      const p = S.inventory.find((x) => x.id === data.property_id);
-      if (p) {
-        syncPlotOverride(p.property_code, data.status);
-        syncPlotOverride(p.id, data.status);
-      }
-      showToast(`Plot successfully updated for ${data.customer_name}! Master plan synced.`);
-      document.getElementById('crm-modal')?.remove();
-      await load();
-      render();
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  };
+  return openBookingModal({ mode: 'offline', propertyId: preselectedPropertyId });
 }
 
 async function openPlotDrawer(p) {
@@ -2468,6 +2545,8 @@ function bind() {
   });
 
   document.getElementById('refresh')?.addEventListener('click', async () => {
+    const btn = document.getElementById('refresh');
+    if (btn) btn.classList.add('spinning');
     try {
       await load();
       render();
@@ -2486,7 +2565,7 @@ function bind() {
       const tbody = document.getElementById('enquiries-table-body');
       const cardsWrap = document.getElementById('enquiries-mobile-cards');
       const countEl = document.querySelector('.crm-card-head h2');
-      const activeEnqs = S.enquiries.filter((enq) => enq.status !== 'CANCEL');
+      const activeEnqs = S.enquiries.filter((enq) => enq.status !== 'CANCEL' && enq.status !== 'BOOKED');
       const cancelledEnqs = S.enquiries.filter((enq) => enq.status === 'CANCEL');
       const targetList = S.enquiryFilter === 'cancelled' ? cancelledEnqs : activeEnqs;
 
@@ -2718,7 +2797,10 @@ function bind() {
   });
 
   document.querySelectorAll('[data-drawer-offline]').forEach((x) => {
-    x.onclick = () => offlineBookingModal(x.dataset.drawerOffline);
+    x.onclick = () => {
+      closePlotDrawer();
+      offlineBookingModal(x.dataset.drawerOffline);
+    };
   });
 
   document.getElementById('inventory-filter')?.addEventListener('change', (e) => {
@@ -2727,9 +2809,15 @@ function bind() {
   });
 
   document.getElementById('inventory-refresh')?.addEventListener('click', async () => {
-    await load();
-    render();
-    showToast('Inventory reloaded.');
+    const btn = document.getElementById('inventory-refresh');
+    if (btn) btn.classList.add('spinning');
+    try {
+      await load();
+      render();
+      showToast('Inventory reloaded.');
+    } catch (e) {
+      showToast(e.message, true);
+    }
   });
 
   document.getElementById('add-visit')?.addEventListener('click', () => addSiteVisitModal());

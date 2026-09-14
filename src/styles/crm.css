@@ -223,6 +223,20 @@
   border-radius: 10px;
   padding: 10px 13px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s, background 0.15s;
+}
+
+@keyframes crm-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.crm-icon-btn.spinning {
+  animation: crm-spin 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
 }
 
 .crm-primary {
@@ -1543,12 +1557,45 @@ tr:hover td {
     font-size: 24px;
   }
 
+  .crm-modal-backdrop {
+    padding: 8px;
+    align-items: center;
+  }
+
   .crm-modal {
-    padding: 18px 14px;
+    padding: 18px 12px;
     border-radius: 14px;
+    width: 98vw;
+    max-height: 94vh;
+  }
+
+  .crm-modal h2 {
+    font-size: 20px;
+  }
+
+  #modal-prop-details-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px !important;
+  }
+
+  .crm-form div[style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
   }
 
   .crm-drawer-grid {
     grid-template-columns: 1fr;
+  }
+
+  .crm-project-pills {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .crm-modal-actions button {
+    width: 100%;
   }
 }
