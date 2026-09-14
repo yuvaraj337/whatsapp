@@ -85,6 +85,17 @@ export function initAiAssistant() {
   const root = document.createElement('div');
   root.id = 'vr-ai-assistant';
 
+  const checkCrm = () => {
+    const hash = window.location.hash || '';
+    const isCrm = hash.includes('/crm');
+    root.style.display = isCrm ? 'none' : '';
+    if (isCrm) {
+      togglePanel(false);
+    }
+  };
+  checkCrm();
+  window.addEventListener('hashchange', checkCrm);
+
   root.innerHTML = `
     <button class="vr-ai-launcher" type="button" aria-label="Open Real Estate Brothers group AI Assistant" aria-expanded="false" aria-controls="vr-ai-panel">
       <span class="vr-ai-launcher-icon" aria-hidden="true">✦</span>

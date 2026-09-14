@@ -60,6 +60,13 @@ function router() {
   // Scroll to top on route change
   window.scrollTo(0, 0);
 
+  // Remove website AI Chatbot launcher on CRM Dashboard, restore on public website
+  const isCrmRoute = cleanPath === '/crm' || cleanPath.startsWith('/crm');
+  const aiAssistantEl = document.getElementById('vr-ai-assistant');
+  if (aiAssistantEl) {
+    aiAssistantEl.style.display = isCrmRoute ? 'none' : '';
+  }
+
   // Exact route match
   if (routes[cleanPath]) {
     const page = routes[cleanPath]();
