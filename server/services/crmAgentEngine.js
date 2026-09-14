@@ -690,6 +690,25 @@ export async function processAgentMessage({
   const text = cleanStr(message);
   if (!text) return null;
 
+  // 0. Check for Greeting or Projects Overview request (Never prompt for booking details on greetings)
+  if (isGreeting(text)) {
+    console.log(`[crmAgentEngine] detected greeting on ${channel}`);
+    return {
+      handled: true,
+      reply: GREETING_RESPONSE
+    };
+  }
+
+  // 0b. Check for specific project info request
+  const projType = isProjectInfoRequest(text);
+  if (projType) {
+    console.log(`[crmAgentEngine] detected project info request (${projType}) on ${channel}`);
+    return {
+      handled: true,
+      reply: getProjectInfoResponse(projType)
+    };
+  }
+
   const lastAssistant = [...conversation].reverse().find(m => m.role === 'assistant' || m.role === 'model');
   const lastAssistantMsg = lastAssistant?.content || '';
 
