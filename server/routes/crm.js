@@ -91,9 +91,9 @@ export function cleanVisitNote(raw) {
   text = text.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, ' ');
   text = text.replace(/(?:\+?91|0)?[-\s]?[6-9]\d{9}\b/g, ' ');
   text = text.replace(/\b\d{10,12}\b/g, ' ');
-  text = text.replace(/(?:my\s+)?phone(?:\s+number)?\s+(?:is|=)\s*[^,\n|]*/gi, ' ');
-  text = text.replace(/(?:my\s+)?email(?:\s+address)?\s+(?:is|=)\s*[^,\n|]*/gi, ' ');
-  text = text.replace(/(?:my\s+)?name\s+(?:is|=)\s*[^,\n|]*/gi, ' ');
+  text = text.replace(/(?:my\s+)?phone(?:\s+number)?\s*(?:is|=)\s*[^,\n|]*/gi, ' ');
+  text = text.replace(/(?:my\s+)?email(?:\s+address)?\s*(?:is|=)\s*[^,\n|]*/gi, ' ');
+  text = text.replace(/(?:my\s+)?(?:full\s+)?name\s*(?:is|=)\s*[^,\n|]*/gi, ' ');
 
   // Strip system booking boilerplate sentences
   text = text.replace(/(?:can\s+you|please|could\s+you|i\s+want\s+to|would\s+like\s+to)?\s*book\s+(?:a\s+)?(?:free\s+)?site\s*visit\s*(?:for\s+)?(?:plot\s*|villa\s*|apartment\s*)?(?:[A-Za-z0-9-]+)?/gi, ' ');
@@ -120,14 +120,18 @@ export function cleanVisitNote(raw) {
 
   if (!words.length) return '-';
 
-  // If remaining words are purely residual generic intent words
-  if (words.every(w => /^(?:i|want|would|like|to|visit|site|plot|unit|property|booking|book|please|can|you|the|for|at|p\d+|v\d+|a\d+)$/i.test(w))) {
+  // If remaining words are purely residual generic intent/conjunction words
+  if (words.every(w => /^(?:i|want|would|like|to|visit|site|plot|unit|property|booking|book|please|can|you|the|for|at|p\d+|v\d+|a\d+|and|or|a|an|my|full|name|email|phone|is|are|in|on|enquiry|enquire|send)$/i.test(w))) {
     return '-';
   }
 
   // Cap at 4-5 words maximum (Requirement 3 & 8)
   let cappedWords = words.slice(0, 5);
   let res = cappedWords.join(' ');
+
+  // Strip leading/trailing dangling conjunctions
+  res = res.replace(/^(?:and|or|the|a|an)\s+/i, '');
+  res = res.replace(/\s+(?:and|or|the|a|an)$/i, '');
 
   // Remove trailing punctuation
   res = res.replace(/[.,;:]+$/, '').trim();
