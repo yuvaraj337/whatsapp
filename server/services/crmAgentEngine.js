@@ -151,6 +151,112 @@ export function extractSchedule(text) {
   return { date: dateStr, time: timeStr };
 }
 
+export const GREETING_RESPONSE = `Hello! I am the VR Real Estate AI Assistant. I am here to help you with information regarding our projects, including:
+
+*   **VR Green Meadows** (Open Plots)
+*   **VR Agro Lands** (Farm Lands)
+*   **VR Green Villas** (Luxury Villas)
+*   **VR Heights** (Premium Apartments)
+
+How can I assist you today? Would you like to know more about any of these projects or schedule a site visit?`;
+
+export function isGreeting(text) {
+  if (!text) return false;
+  const s = String(text).trim().toLowerCase();
+  
+  // 1. Single-word or short greeting phrases
+  if (/^(?:hi|hello|hey|hola|namaste|vanakkam|good\s*(?:morning|afternoon|evening|day)|greetings|start|menu|help|info|who\s*are\s*you|what\s*do\s*you\s*do|hi\s*there|hello\s*there)[.!?\s]*$/i.test(s)) {
+    return true;
+  }
+
+  // 2. Generic greeting questions asking for project overview or what is available
+  if (/^(?:tell\s+me\s+about\s+(?:your\s+)?projects|what\s+projects\s+(?:do\s+you\s+have|are\s+available)|list\s+(?:all\s+)?projects|show\s+projects|all\s+projects|what\s+are\s+the\s+projects|what\s+do\s+you\s+offer)[.!?\s]*$/i.test(s)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function isProjectInfoRequest(text) {
+  if (!text) return null;
+  const s = String(text).trim().toLowerCase();
+  
+  // Specific project queries:
+  if (/^(?:tell\s+me\s+about|details\s+(?:of|for|about)|information\s+about|what\s+is|explain)\s+(?:the\s+)?(?:project\s+)?(?:vr\s+)?green\s+meadows\b/i.test(s) ||
+      /\b(?:about|details)\s+vr\s+green\s+meadows\b/i.test(s) ||
+      /^(?:vr\s+)?green\s+meadows[.!?\s]*$/i.test(s)) {
+    return 'green-meadows';
+  }
+
+  if (/^(?:tell\s+me\s+about|details\s+(?:of|for|about)|information\s+about|what\s+is|explain)\s+(?:the\s+)?(?:project\s+)?(?:vr\s+)?agro\s+lands?\b/i.test(s) ||
+      /\b(?:about|details)\s+vr\s+agro\s+lands?\b/i.test(s) ||
+      /^(?:vr\s+)?agro\s+lands?[.!?\s]*$/i.test(s)) {
+    return 'agro-lands';
+  }
+
+  if (/^(?:tell\s+me\s+about|details\s+(?:of|for|about)|information\s+about|what\s+is|explain)\s+(?:the\s+)?(?:project\s+)?(?:vr\s+)?(?:green\s+|luxury\s+)?villas?\b/i.test(s) ||
+      /\b(?:about|details)\s+vr\s+(?:green\s+|luxury\s+)?villas?\b/i.test(s) ||
+      /^(?:vr\s+)?(?:green\s+|luxury\s+)?villas?[.!?\s]*$/i.test(s)) {
+    return 'green-villas';
+  }
+
+  if (/^(?:tell\s+me\s+about|details\s+(?:of|for|about)|information\s+about|what\s+is|explain)\s+(?:the\s+)?(?:project\s+)?(?:vr\s+)?heights?\b/i.test(s) ||
+      /\b(?:about|details)\s+vr\s+heights?\b/i.test(s) ||
+      /^(?:vr\s+)?heights?[.!?\s]*$/i.test(s)) {
+    return 'heights';
+  }
+
+  return null;
+}
+
+export function getProjectInfoResponse(type) {
+  if (type === 'green-meadows') {
+    return `🌿 **VR Green Meadows** (Open Plots)
+• **Type:** Premium RERA-Approved Residential Plots (Amodha Plots)
+• **Location:** Shadnagar / Bengaluru Highway Growth Corridor, Hyderabad
+• **Plot Sizes:** 200, 220, and 250 sq. yds (East, West & North facing)
+• **Price:** Starting from ₹32 Lakhs (₹16,000 / sq.yd)
+• **Features:** 40ft & 60ft blacktop roads, underground drainage, electricity, 24/7 security, lush parks & children's play area.
+• **Status:** Clear title, ready for immediate registration.
+
+Would you like more details about available plots, or would you like to schedule a site visit?`;
+  }
+  if (type === 'agro-lands') {
+    return `🌾 **VR Agro Lands** (Farm Lands)
+• **Type:** Premium Managed Farmlands & Weekend Agro Estates
+• **Location:** Nature's Nest / Green Valley Corridor, near Hyderabad
+• **Land Sizes:** 0.5 Acre (20 Guntas), 1 Acre, and 2 Acres
+• **Price:** Starting from ₹25 Lakhs per half-acre
+• **Features:** Managed organic fruit plantation (Mango, Guava, Teak), drip irrigation, 24/7 water supply, clubhouse access & fencing.
+• **Status:** Clear title with spot registration.
+
+Would you like more details about farmland units, or would you like to schedule a site visit?`;
+  }
+  if (type === 'green-villas') {
+    return `🏡 **VR Green Villas** (Luxury Villas)
+• **Type:** Ultra-Luxury 4 BHK & 5 BHK Triplex Gated Community Villas
+• **Location:** Silicon Valley / Tech Growth Corridor, Hyderabad
+• **Villa Sizes:** 3,400 to 4,500 sq.ft built-up area (East & West facing)
+• **Price:** Starting from ₹1.75 Cr to ₹2.20 Cr
+• **Features:** Private terrace garden, home theatre, private elevator, grand 30,000 sq.ft clubhouse, swimming pool, and 3-tier security.
+• **Status:** Available for booking.
+
+Would you like more details on floor plans, or would you like to schedule a site visit?`;
+  }
+  if (type === 'heights') {
+    return `🏢 **VR Heights** (Premium Apartments)
+• **Type:** Premium 2 BHK & 3 BHK High-Rise Residential Apartments
+• **Location:** Financial District / IT Hub Corridor, Hyderabad
+• **Unit Sizes:** 1,250 sq.ft (2 BHK) to 1,950 sq.ft (3 BHK)
+• **Price:** Starting from ₹85 Lakhs (₹6,800 / sq.ft)
+• **Features:** Sky deck, panoramic views, EV charging stations, modern clubhouse, infinity pool, and 100% power backup.
+• **Status:** Tower A & Tower B available for booking.
+
+Would you like more details on floor plans, or would you like to schedule a site visit?`;
+  }
+  return GREETING_RESPONSE;
+}
+
 export function isUpdateIntent(text) {
   const s = String(text || '').toLowerCase();
   return /\b(?:change|update|correct|modify|edit)\s+(?:my\s+)?(?:email|mail|name|phone|mobile|number|plot|visit|booking|date|time)\b/i.test(s) ||
@@ -158,36 +264,85 @@ export function isUpdateIntent(text) {
 }
 
 export function isSiteVisitIntent(text, conversationOrPreviousMsg = '') {
-  const s = String(text || '').toLowerCase();
-  if (/\b(site\s*visit|visit|come\s+(?:to|and|see)|schedule\s+(?:a\s+)?visit|appointment|book\s+(?:a\s+)?visit|see\s+the\s+plot|view\s+plot)\b/i.test(s)) {
+  if (!text) return false;
+  const s = String(text || '').trim().toLowerCase();
+
+  // If the message is a greeting or general project request, it is NEVER a site visit intent
+  if (isGreeting(s) || isProjectInfoRequest(s)) {
+    return false;
+  }
+
+  // 1. Explicit site visit phrases in current message
+  if (/\b(?:want\s+to|like\s+to|planning\s+to|can\s+you|please|can\s+i)\s+(?:book|schedule|arrange|fix|plan)\s+(?:a\s+)?(?:free\s+)?site\s*visit\b/i.test(s) ||
+      /\b(?:book|schedule|arrange|plan)\s+(?:a\s+)?(?:free\s+)?site\s*visit\b/i.test(s) ||
+      /\bsite\s*visit\b/i.test(s) && !/\b(?:what\s+is|cancel|about)\s+site\s*visit\b/i.test(s) ||
+      /\b(?:want\s+to|like\s+to|can\s+i|planning\s+to)\s+visit\s+(?:the\s+)?(?:plot|property|villa|apartment|site)\b/i.test(s) ||
+      /\b(?:see|view)\s+(?:the\s+)?(?:plot|site|villa|apartment)\b/i.test(s)) {
     return true;
   }
-  let prevText = '';
+
+  // 2. Follow-up response in an ACTIVE site visit booking flow:
+  // ONLY if the immediately previous assistant message was actively asking for missing site visit details
+  let lastAssistantMsg = '';
   if (Array.isArray(conversationOrPreviousMsg)) {
-    prevText = conversationOrPreviousMsg.map(m => m.content || '').join(' ').toLowerCase();
+    const lastAssistant = [...conversationOrPreviousMsg].reverse().find(m => m.role === 'assistant' || m.role === 'model');
+    lastAssistantMsg = lastAssistant?.content || '';
   } else {
-    prevText = String(conversationOrPreviousMsg || '').toLowerCase();
+    lastAssistantMsg = String(conversationOrPreviousMsg || '');
   }
-  if (prevText && /site\s*visit/i.test(prevText) && /(?:full\s*name|email|mobile|phone|plot)/i.test(prevText)) {
-    return true;
+
+  // If the last assistant message already confirmed the booking, the booking flow is complete!
+  if (/Site Visit Successfully Booked/i.test(lastAssistantMsg)) {
+    return false;
   }
+
+  // If the assistant was asking for booking appointment details:
+  if (/delighted to arrange a site visit|confirm your appointment|provide your \*\*full name\*\*|provide your \*\*email/i.test(lastAssistantMsg)) {
+    // Check if user is answering with contact details, plot, or schedule
+    if (extractEmail(text) || extractPhone(text) || extractPlotCode(text) || extractName(text, lastAssistantMsg) ||
+        /\b(?:tomorrow|today|morning|afternoon|evening|\d{1,2}(?::\d{2})?\s*(?:am|pm))\b/i.test(s) ||
+        /(?:my\s+name|my\s+email|my\s+phone)/i.test(s)) {
+      return true;
+    }
+  }
+
   return false;
 }
 
 export function isEnquiryIntent(text, conversationOrPreviousMsg = '') {
-  const s = String(text || '').toLowerCase();
-  if (/\b(enquiry|inquiry|enquire|inquire|brochure|price\s*list|payment\s*plan|cost\s*sheet|interested\s+in\s+buying|want\s+to\s+buy|call\s+me\s+back|send\s+details)\b/i.test(s)) {
+  if (!text) return false;
+  const s = String(text || '').trim().toLowerCase();
+
+  // If message is a greeting, it is NEVER an enquiry intent
+  if (isGreeting(s) || isProjectInfoRequest(s)) {
+    return false;
+  }
+
+  // 1. Explicit enquiry phrases in current message
+  if (/\b(?:enquiry|inquiry|enquire|inquire|brochure|price\s*list|payment\s*plan|cost\s*sheet|send\s+details)\b/i.test(s) ||
+      /\b(?:i\s+want\s+to|like\s+to)\s+(?:enquire|inquire|send\s+enquiry)\b/i.test(s)) {
     return true;
   }
-  let prevText = '';
+
+  // 2. Follow-up response in an ACTIVE enquiry flow
+  let lastAssistantMsg = '';
   if (Array.isArray(conversationOrPreviousMsg)) {
-    prevText = conversationOrPreviousMsg.map(m => m.content || '').join(' ').toLowerCase();
+    const lastAssistant = [...conversationOrPreviousMsg].reverse().find(m => m.role === 'assistant' || m.role === 'model');
+    lastAssistantMsg = lastAssistant?.content || '';
   } else {
-    prevText = String(conversationOrPreviousMsg || '').toLowerCase();
+    lastAssistantMsg = String(conversationOrPreviousMsg || '');
   }
-  if (prevText && /enquiry/i.test(prevText) && /(?:full\s*name|email|mobile|phone)/i.test(prevText)) {
-    return true;
+
+  if (/Enquiry Successfully Recorded/i.test(lastAssistantMsg)) {
+    return false;
   }
+
+  if (/submit your enquiry|record your enquiry|provide your \*\*full name\*\*/i.test(lastAssistantMsg)) {
+    if (extractEmail(text) || extractPhone(text) || extractName(text, lastAssistantMsg)) {
+      return true;
+    }
+  }
+
   return false;
 }
 
