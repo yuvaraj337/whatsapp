@@ -13,22 +13,84 @@ const iso = (v) => { if (!v) return null; const d = new Date(v); return Number.i
 const dateLabel = (v) => { const d = new Date(v); return Number.isNaN(d.getTime()) ? 'the requested time' : d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }); };
 function authorized(req) { const key = process.env.CRM_ACCESS_KEY; return Boolean(key) && req.headers['x-crm-key'] === key; }
 
-function cleanEnquiryMessage(raw) {
+export function cleanCustomerNote(raw) {
   if (!raw) return '-';
-  const str = String(raw);
-  const msgMatch = str.match(/Message:\s*([^|\n]+)/i);
+  const str = String(raw).trim();
+  if (!str) return '-';
+
+  // If there's an explicit "Message: <text>" pattern, prioritize extracting that
+  const msgMatch = str.match(/(?:Customer Note|Message|Remarks|Note):\s*([^|\n]+)/i);
   if (msgMatch && msgMatch[1].trim()) {
-    return msgMatch[1].trim();
+    const candidate = msgMatch[1].trim();
+    if (!/^(?:none|nil|na|n\/a|-)$/i.test(candidate)) {
+      return candidate;
+    }
   }
+
+  // Strip all system tags, metadata headers, and prefix lines
   let cleaned = str
-    .replace(/\[Website (?:Enquiry|Site Visit)\]/gi, '')
-    .replace(/(?:Project|Property\/Plot|Plot|Type|Area|Price|Unit):\s*[^|\n]*/gi, '')
-    .replace(/Message:\s*/gi, '')
-    .replace(/created from website enquiry form\.?/gi, '')
-    .replace(/[|—\-]+/g, ' ');
-  const lines = cleaned.split('\n').map(l => l.trim()).filter(Boolean);
-  const unique = Array.from(new Set(lines)).join(' ').trim();
+    .replace(/\[(?:Website Enquiry|Website Site Visit|Offline Site Visit|Contact Enquiry|Offline|BOOKED|AUTO-CAPTURED[^\]]*)\]/gi, '')
+    .replace(/(?:Project|Property\/Plot|Plot|Type|Area|Price|Unit|Facing|Source|Date|Time|Scheduled|Status|Message ID|Enquiry ID|Booking ID|Reference|Original Interested Property|Booked Property):\s*[^|\n]*/gi, '')
+    .replace(/(?:Message|Remarks|Notes?):\s*/gi, '')
+    .replace(/created from website (?:enquiry|contact) form\.?/gi, '')
+    .replace(/Site visit scheduled for [^|\n]*/gi, '')
+    .replace(/Offline customer for property [^|\n]*/gi, '')
+    .replace(/[|—\-]+/g, ' ')
+    .trim();
+
+  // Split lines and clean
+  const lines = cleaned.split('\n')
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('http') && !l.includes('wa.me') && !/^(?:none|nil|na|n\/a|-)$/i.test(l));
+
+  const unique = Array.from(new Set(lines)).join(' ').replace(/\s+/g, ' ').trim();
   return unique || '-';
+}
+
+export function parseBookingFinancials(booking, defaultListedPrice = 0) {
+  if (!booking) {
+    const p = Number(defaultListedPrice) || 0;
+    return {
+      listed_price: p,
+      final_price: p,
+      advance: 0,
+      remaining_amount: p
+    };
+  }
+
+  const notes = booking.notes || '';
+  let listed = 0;
+  let finalP = 0;
+  let adv = 0;
+  let rem = 0;
+
+  const mListed = notes.match(/Listed Price:\s*₹?\s*([0-9,]+)/i);
+  if (mListed) listed = Number(mListed[1].replace(/,/g, ''));
+
+  const mFinal = notes.match(/Final (?:Agreed )?Price:\s*₹?\s*([0-9,]+)/i);
+  if (mFinal) finalP = Number(mFinal[1].replace(/,/g, ''));
+
+  const mAdv = notes.match(/Advance(?:\s*Amount|\s*Paid)?:\s*₹?\s*([0-9,]+)/i);
+  if (mAdv) adv = Number(mAdv[1].replace(/,/g, ''));
+
+  const mRem = notes.match(/Remaining(?:\s*Balance|\s*Amount)?:\s*₹?\s*([0-9,]+)/i);
+  if (mRem) rem = Number(mRem[1].replace(/,/g, ''));
+
+  if (!listed) listed = Number(booking.properties?.price || defaultListedPrice || 0);
+  if (!finalP) finalP = Number(booking.final_price || listed || 0);
+  if (!adv) adv = Number(booking.amount || 0);
+  if (!rem) rem = Math.max(0, finalP - adv);
+
+  return {
+    listed_price: listed,
+    final_price: finalP,
+    advance: adv,
+    remaining_amount: rem
+  };
+}
+
+function cleanEnquiryMessage(raw) {
+  return cleanCustomerNote(raw);
 }
 
 async function sendWhatsApp(to, body) {
@@ -191,7 +253,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       const src = (l.source || '').toLowerCase();
       if (src.includes('whatsapp') || src.includes('offline') || src.includes('walkin')) continue;
 
-      const leadLps = (lpByLead.get(l.id) || []).filter(lp => lp.interest_type === 'enquiry');
+      const leadLps = (lpByLead.get(l.id) || []).filter(lp => lp.interest_type !== 'archived');
 
       const blocks = (l.notes || '').split(/\n---\n/).filter(b => {
         const isSiteVisit = /\[Website Site Visit\]|\[Offline Site Visit\]|Site visit scheduled/i.test(b);
@@ -226,13 +288,19 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
           }
           if (!project) project = 'VR Green Meadows';
 
+          // STRICT TRANSACTION ISOLATION:
+          // A customer can have multiple enquiries/properties.
+          // Booking or cancelling one property must NEVER affect another property for the same customer!
+          const lpRecord = matchedProp?.id ? leadLps.find(x => x.property_id === matchedProp.id || x.properties?.id === matchedProp.id) : null;
+          if (lpRecord?.interest_type === 'archived') return;
+
           let status = 'PENDING';
-          if (matchedProp?.id && bookedLeadProps.has(`${l.id}:${matchedProp.id}`)) {
-            status = 'BOOKED';
-          } else if (l.status === 'cancelled' || l.status === 'lost') {
+          if (lpRecord?.interest_type === 'cancelled') {
             status = 'CANCEL';
-          } else if (l.status === 'won' || l.status === 'converted') {
+          } else if (lpRecord?.interest_type === 'booked' || (matchedProp?.id && bookedLeadProps.has(`${l.id}:${matchedProp.id}`))) {
             status = 'BOOKED';
+          } else if (!matchedProp?.id && (l.status === 'cancelled' || l.status === 'lost')) {
+            status = 'CANCEL';
           }
 
           leadEnqs.push({
@@ -244,8 +312,9 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
             project,
             property: property || '—',
             property_id: matchedProp?.id || null,
-            notes: cleanEnquiryMessage(b),
+            notes: cleanCustomerNote(b),
             status,
+            source: 'Website',
             created_at: l.created_at
           });
         });
@@ -253,6 +322,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
 
       // Include any lead_properties not covered by parsed blocks
       leadLps.forEach((lp, idx) => {
+        if (lp.interest_type === 'archived') return;
         const propId = lp.properties?.id || lp.property_id;
         if (!leadEnqs.some(e => e.property_id === propId)) {
           const prop = lp.properties || (propId ? propMap.get(propId) : null);
@@ -260,11 +330,9 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
           let property = prop?.property_code || '—';
 
           let status = 'PENDING';
-          if (propId && bookedLeadProps.has(`${l.id}:${propId}`)) {
-            status = 'BOOKED';
-          } else if (l.status === 'cancelled' || l.status === 'lost') {
+          if (lp.interest_type === 'cancelled') {
             status = 'CANCEL';
-          } else if (l.status === 'won' || l.status === 'converted') {
+          } else if (lp.interest_type === 'booked' || (propId && bookedLeadProps.has(`${l.id}:${propId}`))) {
             status = 'BOOKED';
           }
 
@@ -277,8 +345,9 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
             project,
             property,
             property_id: propId || null,
-            notes: cleanEnquiryMessage(lp.notes || l.notes),
+            notes: cleanCustomerNote(lp.notes || l.notes),
             status,
+            source: 'Website',
             created_at: lp.created_at || l.created_at
           });
         }
@@ -294,8 +363,9 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
           project: 'VR Green Meadows',
           property: '—',
           property_id: null,
-          notes: cleanEnquiryMessage(l.notes),
+          notes: cleanCustomerNote(l.notes),
           status: 'PENDING',
+          source: 'Website',
           created_at: l.created_at
         });
       }
@@ -329,10 +399,11 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
           interest_type: 'cancelled'
         }).catch(() => null);
       } else {
-        await supabaseAdminPatch('leads', { id: `eq.${realLeadId}` }, {
-          status: 'cancelled',
-          updated_at: new Date().toISOString()
-        });
+        await supabaseAdminPatch('lead_properties', {
+          lead_id: `eq.${realLeadId}`
+        }, {
+          interest_type: 'cancelled'
+        }).catch(() => null);
       }
       return { status: 200, data: { success: true, status: 'CANCEL' } };
     }
@@ -345,11 +416,13 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         }, {
           interest_type: 'enquiry'
         }).catch(() => null);
+      } else {
+        await supabaseAdminPatch('lead_properties', {
+          lead_id: `eq.${realLeadId}`
+        }, {
+          interest_type: 'enquiry'
+        }).catch(() => null);
       }
-      await supabaseAdminPatch('leads', { id: `eq.${realLeadId}` }, {
-        status: 'new',
-        updated_at: new Date().toISOString()
-      }).catch(() => null);
       return { status: 200, data: { success: true, status: 'PENDING' } };
     }
 
@@ -358,6 +431,12 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         await supabaseAdminPatch('lead_properties', {
           lead_id: `eq.${realLeadId}`,
           property_id: `eq.${targetPropertyId}`
+        }, {
+          interest_type: 'archived'
+        }).catch(() => null);
+      } else {
+        await supabaseAdminPatch('lead_properties', {
+          lead_id: `eq.${realLeadId}`
         }, {
           interest_type: 'archived'
         }).catch(() => null);
@@ -391,7 +470,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       const property = await propertyById(propertyId);
       if (!property) return { status: 404, error: { code: 'PROPERTY_NOT_FOUND', message: 'Property not found.' } };
 
-      // Duplicate booking protection
+      // Concurrency & duplicate booking protection (Section 31)
       if (property.inventory_status === 'BOOKED' || property.inventory_status === 'SOLD') {
         return {
           status: 409,
@@ -402,10 +481,35 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         };
       }
 
+      // Property switching before booking (Section 4, 30):
+      // If customer originally enquired about P17 but customer books P18:
+      // Book P18, keep P17 AVAILABLE, track original interested property
+      const originalPropId = (targetPropertyId && !targetPropertyId.startsWith('b_') && !targetPropertyId.startsWith('lp_')) ? targetPropertyId : null;
+      let originalPropertyCode = '';
+      if (originalPropId && originalPropId !== propertyId) {
+        const origProp = await propertyById(originalPropId).catch(() => null);
+        originalPropertyCode = origProp?.property_code || '';
+        // Ensure original property remains AVAILABLE
+        if (origProp && origProp.inventory_status !== 'BOOKED' && origProp.inventory_status !== 'SOLD') {
+          await supabaseAdminPatch('properties', { id: `eq.${originalPropId}` }, {
+            inventory_status: 'AVAILABLE',
+            updated_at: new Date().toISOString()
+          }).catch(() => null);
+        }
+        // Update lead_properties for original property to note property switch
+        await supabaseAdminPatch('lead_properties', {
+          lead_id: `eq.${realLeadId}`,
+          property_id: `eq.${originalPropId}`
+        }, {
+          notes: `Customer switched preference to ${property.property_code || propertyId}`
+        }).catch(() => null);
+      }
+
       const finalPrice = Number(body.final_price || body.finalPrice || property.price || 0);
       const advance = Number(body.amount ?? body.advance ?? 0);
       const remaining = Math.max(0, finalPrice - advance);
-      const bookingNotes = `[Enquiry Booking] Listed Price: ₹${Number(property.price || 0).toLocaleString('en-IN')} | Final Agreed Price: ₹${Number(finalPrice).toLocaleString('en-IN')} | Advance: ₹${Number(advance).toLocaleString('en-IN')} | Remaining: ₹${Number(remaining).toLocaleString('en-IN')}${body.notes ? ` | Notes: ${clean(body.notes)}` : ''}`;
+      const switchNote = originalPropertyCode ? ` | Original Interested Property: ${originalPropertyCode} | Booked Property: ${property.property_code || propertyId}` : '';
+      const bookingNotes = `[Enquiry Booking] Listed Price: ₹${Number(property.price || 0).toLocaleString('en-IN')} | Final Agreed Price: ₹${Number(finalPrice).toLocaleString('en-IN')} | Advance: ₹${Number(advance).toLocaleString('en-IN')} | Remaining: ₹${Number(remaining).toLocaleString('en-IN')}${switchNote}${body.notes ? ` | Notes: ${clean(body.notes)}` : ''}`;
 
       const existingBooking = await supabaseAdminGet('bookings', {
         select: 'id,booking_reference,status',
@@ -444,10 +548,57 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         reason: `Enquiry booked: ${lead.name || 'Customer'} (${lead.phone || ''})`
       }).catch(() => null);
 
-      await supabaseAdminPatch('leads', { id: `eq.${realLeadId}` }, {
-        status: 'won',
-        updated_at: new Date().toISOString()
-      });
+      // Record in lead_properties for this specific booked property
+      const existingLP = await supabaseAdminGet('lead_properties', {
+        select: 'id',
+        lead_id: `eq.${realLeadId}`,
+        property_id: `eq.${propertyId}`,
+        limit: '1'
+      }).catch(() => []);
+
+      if (existingLP[0]) {
+        await supabaseAdminPatch('lead_properties', {
+          lead_id: `eq.${realLeadId}`,
+          property_id: `eq.${propertyId}`
+        }, {
+          interest_type: 'booked',
+          notes: bookingNotes
+        }).catch(() => null);
+      } else {
+        await supabaseAdminPost('lead_properties', {
+          lead_id: realLeadId,
+          property_id: propertyId,
+          interest_type: 'booked',
+          notes: bookingNotes
+        }).catch(() => null);
+      }
+
+      // CRITICAL BUG FIX (Section 2 & 18):
+      // Do NOT patch leads.status = 'won'! A customer may have multiple enquiries/site visits for other properties.
+      // Those other records must remain completely untouched and independent.
+
+      // Dispatch WhatsApp booking confirmation to this specific customer (Section 33)
+      if (lead?.phone) {
+        try {
+          const conv = await getOrCreateConversation(lead.id, lead.phone);
+          const customerName = lead.name || 'Valued Customer';
+          const projectName = property.projects?.name || property.title || 'VR Real Estate Venture';
+          const messageText =
+            `*Real Estate Brothers group – BOOKING CONFIRMED* 🏡\n\n` +
+            `Hello ${customerName},\n\n` +
+            `Congratulations! Your booking for *${projectName}* – *${property.property_code ? 'Plot ' + property.property_code : (property.title || 'Property')}* has been *CONFIRMED*.\n\n` +
+            `🔖 *Booking Reference:* ${booking?.booking_reference || 'BKG'}\n` +
+            `💰 *Final Agreed Price:* ₹${Number(finalPrice).toLocaleString('en-IN')}\n` +
+            `💵 *Advance Paid:* ₹${Number(advance).toLocaleString('en-IN')}\n` +
+            `💳 *Remaining Balance:* ₹${Number(remaining).toLocaleString('en-IN')}\n\n` +
+            `Our relationship manager will reach out shortly with the formal sale agreement documentation.\n\n` +
+            `Best regards,\n*Real Estate Brothers group Team*`;
+          if (conv) await writeOutbound(conv, messageText);
+          else await sendWhatsApp(lead.phone, messageText);
+        } catch (waErr) {
+          console.warn('[crm] WhatsApp booking confirmation warning:', waErr?.message || waErr);
+        }
+      }
 
       return {
         status: 200,
@@ -457,6 +608,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
           booking,
           property_id: propertyId,
           property_code: property.property_code,
+          listed_price: Number(property.price || 0),
           final_price: finalPrice,
           advance,
           remaining_amount: remaining
@@ -627,7 +779,12 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         projects: { name: projectName || 'VR Green Meadows' }
       };
 
-      return { ...v, status: currentStatus, properties: updatedProps };
+      return {
+        ...v,
+        status: currentStatus,
+        properties: updatedProps,
+        customer_note: cleanCustomerNote(v.notes)
+      };
     });
     if (status === 'BOOKED') {
       visits = visits.filter(v => v.status === 'BOOKED');
@@ -683,7 +840,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
     return { status: 201, data: { visit: rows[0] || null } };
   }
   if (req.method === 'PATCH' && section === 'site-visits' && id) {
-    const rows = await supabaseAdminGet('site_visits', { select: 'id,lead_id,property_id,requested_at,scheduled_at,status,confirmed_at,completed_at,cancelled_at,notes,leads(name,phone),properties(id,property_code,title,inventory_status)', id: `eq.${id}`, limit: '1' });
+    const rows = await supabaseAdminGet('site_visits', { select: 'id,lead_id,property_id,requested_at,scheduled_at,status,confirmed_at,completed_at,cancelled_at,notes,leads(id,name,phone,email),properties(id,property_code,title,inventory_status,price,projects(name))', id: `eq.${id}`, limit: '1' });
     const visit = rows[0]; if (!visit) return { status: 404, error: { code: 'SITE_VISIT_NOT_FOUND', message: 'Site visit not found.' } };
     const next = clean(body.status).toUpperCase(); if (!VISIT_STATUSES.includes(next)) return bad('Invalid site visit status.', 'INVALID_SITE_VISIT_STATUS');
     const transitions = {
@@ -699,13 +856,14 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
 
     // SITE VISIT → BOOKED: Owner converts site visit to confirmed booking
     if (next === 'BOOKED') {
-      if (!visit.property_id) {
+      const selectedPropertyId = clean(body.property_id) || visit.property_id;
+      if (!selectedPropertyId) {
         return bad('Site visit does not have an associated property to book.', 'NO_PROPERTY');
       }
-      const prop = await propertyById(visit.property_id);
+      const prop = await propertyById(selectedPropertyId);
       if (!prop) return { status: 404, error: { code: 'PROPERTY_NOT_FOUND', message: 'Property not found.' } };
 
-      // Duplicate booking protection
+      // Concurrency & duplicate booking protection (Section 31)
       if (prop.inventory_status === 'BOOKED' || prop.inventory_status === 'SOLD') {
         return {
           status: 409,
@@ -716,15 +874,27 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         };
       }
 
+      // Property switching check:
+      if (visit.property_id && visit.property_id !== selectedPropertyId) {
+        const origProp = await propertyById(visit.property_id).catch(() => null);
+        if (origProp && origProp.inventory_status !== 'BOOKED' && origProp.inventory_status !== 'SOLD') {
+          await supabaseAdminPatch('properties', { id: `eq.${visit.property_id}` }, {
+            inventory_status: 'AVAILABLE',
+            updated_at: new Date().toISOString()
+          }).catch(() => null);
+        }
+      }
+
       const finalPrice = Number(body.final_price || body.finalPrice || prop.price || 0);
       const advance = Number(body.amount ?? body.advance ?? 0);
       const remaining = Math.max(0, finalPrice - advance);
-      const bookingNotes = `[Site Visit Booking] Listed Price: ₹${Number(prop.price || 0).toLocaleString('en-IN')} | Final Agreed Price: ₹${Number(finalPrice).toLocaleString('en-IN')} | Advance: ₹${Number(advance).toLocaleString('en-IN')} | Remaining: ₹${Number(remaining).toLocaleString('en-IN')}${body.notes ? ` | Notes: ${clean(body.notes)}` : ''}`;
+      const switchNote = (visit.property_id && visit.property_id !== selectedPropertyId) ? ` | Switched from visit property to ${prop.property_code}` : '';
+      const bookingNotes = `[Site Visit Booking] Listed Price: ₹${Number(prop.price || 0).toLocaleString('en-IN')} | Final Agreed Price: ₹${Number(finalPrice).toLocaleString('en-IN')} | Advance: ₹${Number(advance).toLocaleString('en-IN')} | Remaining: ₹${Number(remaining).toLocaleString('en-IN')}${switchNote}${body.notes ? ` | Notes: ${clean(body.notes)}` : ''}`;
 
       const existing = await supabaseAdminGet('bookings', {
         select: 'id,booking_reference,status',
         lead_id: `eq.${visit.lead_id}`,
-        property_id: `eq.${visit.property_id}`,
+        property_id: `eq.${selectedPropertyId}`,
         status: 'eq.CONFIRMED',
         limit: '1'
       }).catch(() => []);
@@ -734,7 +904,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         const ref = `BKG-${Date.now().toString(36).toUpperCase()}`;
         const newBookings = await supabaseAdminPost('bookings', {
           lead_id: visit.lead_id,
-          property_id: visit.property_id,
+          property_id: selectedPropertyId,
           status: 'CONFIRMED',
           booking_reference: ref,
           amount: advance || null,
@@ -746,13 +916,13 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         booking = newBookings[0];
       }
 
-      await supabaseAdminPatch('properties', { id: `eq.${visit.property_id}` }, {
+      await supabaseAdminPatch('properties', { id: `eq.${selectedPropertyId}` }, {
         inventory_status: 'BOOKED',
         updated_at: new Date().toISOString()
       });
 
       await supabaseAdminPost('inventory_status_history', {
-        property_id: visit.property_id,
+        property_id: selectedPropertyId,
         from_status: prop.inventory_status,
         to_status: 'BOOKED',
         reason: `Site visit converted to booking: ${visit.leads?.name || 'Customer'}`
@@ -765,13 +935,37 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         updated_at: new Date().toISOString()
       });
 
+      // Dispatch WhatsApp booking confirmation to customer (Section 33)
+      if (visit.leads?.phone) {
+        try {
+          const conv = await getOrCreateConversation(visit.lead_id, visit.leads.phone);
+          const customerName = visit.leads.name || 'Valued Customer';
+          const projectName = prop.projects?.name || prop.title || 'VR Real Estate Venture';
+          const messageText =
+            `*Real Estate Brothers group – BOOKING CONFIRMED* 🏡\n\n` +
+            `Hello ${customerName},\n\n` +
+            `Congratulations! Following your site visit, your booking for *${projectName}* – *Plot ${prop.property_code || 'Unit'}* has been *CONFIRMED*.\n\n` +
+            `🔖 *Booking Reference:* ${booking?.booking_reference || 'BKG'}\n` +
+            `💰 *Final Agreed Price:* ₹${Number(finalPrice).toLocaleString('en-IN')}\n` +
+            `💵 *Advance Paid:* ₹${Number(advance).toLocaleString('en-IN')}\n` +
+            `💳 *Remaining Balance:* ₹${Number(remaining).toLocaleString('en-IN')}\n\n` +
+            `Our team will reach out with the sale agreement and next steps.\n\n` +
+            `Best regards,\n*Real Estate Brothers group Team*`;
+          if (conv) await writeOutbound(conv, messageText);
+          else await sendWhatsApp(visit.leads.phone, messageText);
+        } catch (waErr) {
+          console.warn('[crm] WhatsApp site-visit booking confirmation warning:', waErr?.message || waErr);
+        }
+      }
+
       return {
         status: 200,
         data: {
           visit: { ...(updated[0] || visit), status: 'BOOKED' },
           booking,
-          property_id: visit.property_id,
+          property_id: selectedPropertyId,
           property_code: prop.property_code,
+          listed_price: Number(prop.price || 0),
           final_price: finalPrice,
           advance,
           remaining_amount: remaining
@@ -883,8 +1077,8 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
 
     const properties = await supabaseAdminGet('properties', params);
 
-    // Attach active customer/booking info for BOOKED/HOLD properties (Section 6 & 11)
-    const bookedProps = properties.filter(p => p.inventory_status === 'BOOKED' || p.inventory_status === 'HOLD' || p.inventory_status === 'RESERVED');
+    // Attach active customer/booking info for BOOKED, HOLD, RESERVED, AND SOLD properties (Section 3 & 15)
+    const bookedProps = properties.filter(p => p.inventory_status === 'BOOKED' || p.inventory_status === 'HOLD' || p.inventory_status === 'RESERVED' || p.inventory_status === 'SOLD');
     if (bookedProps.length) {
       const propIds = bookedProps.map(p => p.id);
       const bookings = await supabaseAdminGet('bookings', {
@@ -901,11 +1095,15 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       properties.forEach(p => {
         const b = bookingMap.get(p.id);
         if (b) {
+          const fin = parseBookingFinancials(b, p.price);
           p.active_booking = {
             id: b.id,
             booking_reference: b.booking_reference,
             status: b.status,
-            amount: b.amount,
+            amount: fin.advance,
+            listed_price: fin.listed_price,
+            final_price: fin.final_price,
+            remaining_amount: fin.remaining_amount,
             booked_at: b.booked_at,
             notes: b.notes,
             customer_name: b.leads?.name || '',
@@ -948,16 +1146,25 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
   if (req.method === 'GET' && section === 'bookings') {
     const status = clean(searchParams.get('status')).toUpperCase();
     const params = {
-      select: 'id,lead_id,property_id,status,booking_reference,amount,currency,booked_at,confirmed_at,cancelled_at,cancellation_reason,notes,created_at,updated_at,leads(id,name,phone,email,status,source),properties(id,property_code,title,inventory_status,projects(name,slug))',
+      select: 'id,lead_id,property_id,status,booking_reference,amount,currency,booked_at,confirmed_at,cancelled_at,cancellation_reason,notes,created_at,updated_at,leads(id,name,phone,email,status,source),properties(id,property_code,title,inventory_status,price,projects(name,slug))',
       order: 'created_at.desc',
       limit: '500'
     };
     if (status && status !== 'ALL') {
-      params.status = `eq.${status}`;
-    } else if (!status) {
-      params.status = 'eq.CONFIRMED';
+      params.status = status === 'BOOKED' ? 'eq.CONFIRMED' : `eq.${status}`;
     }
-    return { status: 200, data: { bookings: await supabaseAdminGet('bookings', params) } };
+    const rawBookings = await supabaseAdminGet('bookings', params);
+    const bookings = rawBookings.map(b => {
+      const fin = parseBookingFinancials(b, b.properties?.price);
+      return {
+        ...b,
+        listed_price: fin.listed_price,
+        final_price: fin.final_price,
+        amount: fin.advance,
+        remaining_amount: fin.remaining_amount
+      };
+    });
+    return { status: 200, data: { bookings } };
   }
   if (req.method === 'POST' && section === 'offline-booking') {
     const propertyId = clean(body.property_id);
@@ -1086,17 +1293,22 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       updated_at: new Date().toISOString()
     });
 
+    const finalPrice = Number(body.final_price || body.finalPrice || property.price || 0);
+    const advance = Number(body.amount ?? body.advance ?? 0);
+    const remaining = Math.max(0, finalPrice - advance);
+    const bookingNotes = `[Direct Booking] Listed Price: ₹${Number(property.price || 0).toLocaleString('en-IN')} | Final Agreed Price: ₹${Number(finalPrice).toLocaleString('en-IN')} | Advance: ₹${Number(advance).toLocaleString('en-IN')} | Remaining: ₹${Number(remaining).toLocaleString('en-IN')}${body.notes ? ` | Notes: ${clean(body.notes)}` : ''}`;
+
     const bookingRef = clean(body.booking_reference) || `BKG-${Date.now().toString(36).toUpperCase()}`;
     const rows = await supabaseAdminPost('bookings', {
       lead_id: leadId,
       property_id: propertyId,
       status: 'CONFIRMED',
       booking_reference: bookingRef,
-      amount: body.amount ?? null,
+      amount: advance || null,
       currency: clean(body.currency) || 'INR',
       booked_at: new Date().toISOString(),
       confirmed_at: new Date().toISOString(),
-      notes: clean(body.notes) || 'Direct booking confirmed via CRM'
+      notes: bookingNotes
     });
 
     await supabaseAdminPost('inventory_status_history', {
@@ -1106,7 +1318,17 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       reason: `Direct booking confirmed via CRM: ${body.customer_name || leadId}`
     }).catch(() => null);
 
-    return { status: 201, data: { booking: rows[0] || null, property_id: propertyId, inventory_status: 'BOOKED' } };
+    return {
+      status: 201,
+      data: {
+        booking: rows[0] || null,
+        property_id: propertyId,
+        inventory_status: 'BOOKED',
+        final_price: finalPrice,
+        advance,
+        remaining_amount: remaining
+      }
+    };
   }
   if (req.method === 'PATCH' && section === 'bookings' && id) {
     const rows = await supabaseAdminGet('bookings', { select: 'id,lead_id,property_id,status,booking_reference,amount,currency,booked_at,confirmed_at,cancelled_at,notes', id: `eq.${id}`, limit: '1' }); const booking = rows[0];

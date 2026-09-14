@@ -576,7 +576,7 @@ export function renderEnquiryForm(context = null) {
         <form id="sv-enquiry-form" class="sv-form-body">
           <div class="sv-input-group">
             <label class="sv-label" for="enq-input-name">Full Name *</label>
-            <input type="text" id="enq-input-name" class="sv-input" placeholder="e.g. Siva Prasad" required />
+            <input type="text" id="enq-input-name" class="sv-input" placeholder="e.g. Rahul Kumar" required />
             <span class="sv-error-msg" id="err-enq-name" style="color: #DC2626; font-size: 0.76rem;"></span>
           </div>
 
