@@ -21,10 +21,13 @@ export function extractEmail(text) {
 
 export function extractPhone(text) {
   if (!text) return '';
+  // Strip email addresses first so timestamp numbers or numbers in email domains/localparts aren't mistaken for phones
+  const withoutEmails = String(text).replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '');
+  
   // Match 10-digit Indian phone, optionally with +91 or 0
-  const match = String(text).match(/(?:(?:\+?91|0)?[-\s]?)?([6-9]\d{9})\b/);
+  const match = withoutEmails.match(/(?:(?:\+?91|0)?[-\s]?)?([6-9]\d{9})\b/);
   if (match) return match[1];
-  const loose = String(text).match(/\b\d{10}\b/);
+  const loose = withoutEmails.match(/\b\d{10}\b/);
   return loose ? loose[0] : '';
 }
 
@@ -81,10 +84,10 @@ export function extractName(text, previousAssistantMsg = '') {
   const s = String(text).trim();
 
   // 1. Explicit name patterns
-  const explicit = s.match(/(?:my\s+name\s+is|name\s+is|name\s*:|i\s+am|i'm|this\s+is)\s+([A-Za-z][A-Za-z\s.]{1,25})/i);
+  const explicit = s.match(/(?:my\s+name\s+is|name\s+is|name\s*:|i\s+am|i'm|this\s+is)\s+([A-Za-z][A-Za-z\s.]{1,35})/i);
   if (explicit && explicit[1]) {
-    const candidate = explicit[1].trim();
-    if (!/^(?:booking|interested|looking|calling|visiting|checking|inquiring|here)$/i.test(candidate)) {
+    const candidate = explicit[1].replace(/\b(?:and|email|mail|phone|mobile|plot|number)\b.*$/i, '').trim();
+    if (candidate && !/^(?:booking|interested|looking|calling|visiting|checking|inquiring|here)$/i.test(candidate)) {
       return candidate;
     }
   }
@@ -154,23 +157,35 @@ export function isUpdateIntent(text) {
          /\b(?:my\s+(?:email|mail)\s+is\s+actually|my\s+name\s+is\s+actually|please\s+(?:update|change))\b/i.test(s);
 }
 
-export function isSiteVisitIntent(text, previousAssistantMsg = '') {
+export function isSiteVisitIntent(text, conversationOrPreviousMsg = '') {
   const s = String(text || '').toLowerCase();
   if (/\b(site\s*visit|visit|come\s+(?:to|and|see)|schedule\s+(?:a\s+)?visit|appointment|book\s+(?:a\s+)?visit|see\s+the\s+plot|view\s+plot)\b/i.test(s)) {
     return true;
   }
-  if (previousAssistantMsg && /site\s*visit/i.test(previousAssistantMsg) && /(?:full\s*name|email|mobile|plot)/i.test(previousAssistantMsg)) {
+  let prevText = '';
+  if (Array.isArray(conversationOrPreviousMsg)) {
+    prevText = conversationOrPreviousMsg.map(m => m.content || '').join(' ').toLowerCase();
+  } else {
+    prevText = String(conversationOrPreviousMsg || '').toLowerCase();
+  }
+  if (prevText && /site\s*visit/i.test(prevText) && /(?:full\s*name|email|mobile|phone|plot)/i.test(prevText)) {
     return true;
   }
   return false;
 }
 
-export function isEnquiryIntent(text, previousAssistantMsg = '') {
+export function isEnquiryIntent(text, conversationOrPreviousMsg = '') {
   const s = String(text || '').toLowerCase();
   if (/\b(enquiry|inquiry|enquire|inquire|brochure|price\s*list|payment\s*plan|cost\s*sheet|interested\s+in\s+buying|want\s+to\s+buy|call\s+me\s+back|send\s+details)\b/i.test(s)) {
     return true;
   }
-  if (previousAssistantMsg && /enquiry/i.test(previousAssistantMsg) && /(?:full\s*name|email|mobile)/i.test(previousAssistantMsg)) {
+  let prevText = '';
+  if (Array.isArray(conversationOrPreviousMsg)) {
+    prevText = conversationOrPreviousMsg.map(m => m.content || '').join(' ').toLowerCase();
+  } else {
+    prevText = String(conversationOrPreviousMsg || '').toLowerCase();
+  }
+  if (prevText && /enquiry/i.test(prevText) && /(?:full\s*name|email|mobile|phone)/i.test(prevText)) {
     return true;
   }
   return false;
@@ -221,32 +236,55 @@ export async function handleDetailUpdate({ phone, email, text, conversation = []
 
   // Extract new name if specified
   let newName = '';
-  const nameMatch = s.match(/(?:change|update|correct|set)?\s*(?:my\s+)?name\s+(?:to|is)\s+([A-Za-z][A-Za-z\s.]{1,25})/i) ||
-                    s.match(/(?:my\s+name\s+is\s+actually)\s+([A-Za-z][A-Za-z\s.]{1,25})/i);
+  const nameMatch = s.match(/(?:change|update|correct|set)?\s*(?:my\s+)?name\s+(?:to|is)\s+([A-Za-z.][A-Za-z\s.]{1,30})/i) ||
+                    s.match(/(?:my\s+name\s+is\s+actually)\s+([A-Za-z.][A-Za-z\s.]{1,30})/i);
   if (nameMatch && nameMatch[1]) {
-    newName = nameMatch[1].trim();
+    newName = nameMatch[1].replace(/\b(?:and|please|email|phone|mobile|date|time)\b.*$/i, '').trim();
   }
 
-  // Identify target lead: by phone or email or conversation history
-  const context = aggregateConversationContext(conversation, text);
-  const targetPhone = phone || newPhone || context.phone;
-  const targetEmail = email || newEmail || context.email;
+  // Identify target lead: by channel phone, previous conversation phone, or previous conversation email
+  const context = aggregateConversationContext(conversation, '');
+  const isPhoneChange = /\b(?:change|update|correct|set)?\s*(?:my\s+)?(?:phone|mobile|number)\s+(?:to|is)\b/i.test(s);
+  const lookupPhone = phone || context.phone || (isPhoneChange ? '' : newPhone);
+  const lookupEmail = context.email || email;
 
   let lead = null;
-  if (targetPhone) {
-    const norm = normalizePhone(targetPhone);
+  if (lookupPhone) {
+    const norm = normalizePhone(lookupPhone);
     const rows = await supabaseAdminGet('leads', {
       select: 'id,name,phone,email,notes',
       phone: `eq.${norm}`,
+      order: 'created_at.desc',
+      limit: '1'
+    }).catch(() => []);
+    if (rows[0]) lead = rows[0];
+    if (!lead && norm.length === 12 && norm.startsWith('91')) {
+      const rows10 = await supabaseAdminGet('leads', {
+        select: 'id,name,phone,email,notes',
+        phone: `eq.${norm.slice(2)}`,
+        order: 'created_at.desc',
+        limit: '1'
+      }).catch(() => []);
+      if (rows10[0]) lead = rows10[0];
+    }
+  }
+
+  if (!lead && lookupEmail) {
+    const rows = await supabaseAdminGet('leads', {
+      select: 'id,name,phone,email,notes',
+      email: `eq.${lookupEmail}`,
+      order: 'created_at.desc',
       limit: '1'
     }).catch(() => []);
     if (rows[0]) lead = rows[0];
   }
 
-  if (!lead && targetEmail) {
+  if (!lead && newPhone) {
+    const norm = normalizePhone(newPhone);
     const rows = await supabaseAdminGet('leads', {
       select: 'id,name,phone,email,notes',
-      email: `eq.${targetEmail}`,
+      phone: `eq.${norm}`,
+      order: 'created_at.desc',
       limit: '1'
     }).catch(() => []);
     if (rows[0]) lead = rows[0];
@@ -497,9 +535,8 @@ export async function processAgentMessage({
   const text = cleanStr(message);
   if (!text) return null;
 
-  const lastAssistantMsg = conversation.length
-    ? (conversation[conversation.length - 1].role === 'assistant' ? conversation[conversation.length - 1].content : '')
-    : '';
+  const lastAssistant = [...conversation].reverse().find(m => m.role === 'assistant' || m.role === 'model');
+  const lastAssistantMsg = lastAssistant?.content || '';
 
   // 1. Check for Detail Update (name, email, phone, plot, schedule)
   if (isUpdateIntent(text)) {
@@ -508,7 +545,7 @@ export async function processAgentMessage({
   }
 
   // 2. Check for Site Visit Booking intent
-  if (isSiteVisitIntent(text, lastAssistantMsg)) {
+  if (isSiteVisitIntent(text, conversation)) {
     console.log(`[crmAgentEngine] detected site visit booking intent on ${channel}`);
     return handleSiteVisitBooking({
       text,
@@ -520,7 +557,7 @@ export async function processAgentMessage({
   }
 
   // 3. Check for Enquiry submission intent
-  if (isEnquiryIntent(text, lastAssistantMsg)) {
+  if (isEnquiryIntent(text, conversation)) {
     console.log(`[crmAgentEngine] detected enquiry intent on ${channel}`);
     return handleEnquirySubmission({
       text,
