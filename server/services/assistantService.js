@@ -144,13 +144,32 @@ function providerErrorDetails(payload) {
   };
 }
 
-export async function answerAssistant({ message, conversation = [] }) {
+import { processAgentMessage } from './crmAgentEngine.js';
+
+export async function answerAssistant({ message, conversation = [], phone = '', profileName = '', channel = 'website' }) {
   if (typeof message !== 'string' || !message.trim()) {
     return { status: 400, error: { code: 'MESSAGE_REQUIRED', message: 'A message is required.' } };
   }
   if (message.length > MAX_MESSAGE_LENGTH) {
     return { status: 400, error: { code: 'MESSAGE_TOO_LARGE', message: `Message must be ${MAX_MESSAGE_LENGTH} characters or fewer.` } };
   }
+
+  // 1. Process CRM Agent actions (Site visits, Enquiries, Detail updates)
+  try {
+    const agentResult = await processAgentMessage({
+      message: message.trim(),
+      conversation,
+      phone,
+      profileName,
+      channel
+    });
+    if (agentResult && agentResult.reply) {
+      return { status: 200, data: { reply: agentResult.reply, agentResult } };
+    }
+  } catch (agentErr) {
+    console.warn('[assistant] crmAgentEngine error:', agentErr?.message || agentErr);
+  }
+
   if (!process.env.GEMINI_API_KEY) {
     return { status: 503, error: { code: 'AI_NOT_CONFIGURED', message: 'The AI assistant is not configured yet.' } };
   }

@@ -187,8 +187,12 @@ export async function findOrCreateLead(name, rawPhone, email, notes, source = 'W
   if (existing[0]) {
     const lead = existing[0];
     const update = { updated_at: new Date().toISOString() };
-    if (!lead.name && name) update.name = name;
-    if (!lead.email && email) update.email = email;
+    if (name && (name !== lead.name || !lead.name || /unknown|whatsapp customer/i.test(lead.name))) {
+      update.name = name;
+    }
+    if (email && email !== lead.email) {
+      update.email = email;
+    }
     if (notes) {
       update.notes = lead.notes ? `${lead.notes}\n---\n${notes}` : notes;
     }

@@ -270,61 +270,28 @@ export async function handleWhatsApp(req, pathParts, searchParams, body = {}) {
           await updateLeadFromMessage(lead, text).catch((error) => console.error('[whatsapp] lead update failed:', error?.message || error));
           await recordPlotInterest(lead.id, text).catch((error) => console.error('[whatsapp] interest tracking failed:', error?.message || error));
 
-          // 3. WHATSAPP AI SITE VISIT CREATION FLOW (Critical Fix)
-          let siteVisitCreated = null;
-          const visitDetails = extractSiteVisitFromMessage(text);
-          if (visitDetails) {
-            console.log(`[whatsapp-ai] detected site visit request:`, visitDetails);
-            try {
-              // Deduplicate: Check if a visit with this message ID was already created in notes
-              const existingVisits = await supabaseAdminGet('site_visits', {
-                select: 'id',
-                lead_id: `eq.${lead.id}`,
-                notes: `ilike.%${message.id}%`,
-                limit: '1'
-              }).catch(() => []);
-
-              if (!existingVisits[0]) {
-                const visitRecord = await createSiteVisitRecord({
-                  name: profileName || lead.name || 'WhatsApp Customer',
-                  phone,
-                  projectName: visitDetails.projectName,
-                  propertyCode: visitDetails.plotCode,
-                  date: visitDetails.date,
-                  time: visitDetails.time,
-                  notes: `[WhatsApp AI Site Visit Request] Message ID: ${message.id} | Query: "${text}"`,
-                  source: 'WhatsApp AI'
-                });
-                siteVisitCreated = visitRecord;
-                console.log(`[whatsapp-ai] Site visit created successfully in Supabase (id: ${visitRecord?.visit?.id})`);
-              } else {
-                console.log(`[whatsapp-ai] duplicate site visit request detected for message id ${message.id}, skipped.`);
-              }
-            } catch (svErr) {
-              console.error('[whatsapp-ai] Failed to create site visit record:', svErr?.message || svErr);
-            }
-          }
-
-          // 4. AI Assistant Response
+          // 3. AI Assistant & CRM Agent Workflow Response
           if (conversation.ai_enabled !== false) {
-            console.log('[whatsapp] asking AI assistant...');
+            console.log('[whatsapp] asking AI assistant & CRM agent...');
             const history = await conversationHistory(conversation.id);
-            const result = await answerAssistant({ message: text, conversation: history });
-            let reply = result.status === 200
-              ? result.data.reply
+            const result = await answerAssistant({
+              message: text,
+              conversation: history,
+              phone,
+              profileName: profileName || lead?.name || '',
+              channel: 'whatsapp'
+            });
+
+            const reply = result?.status === 200
+              ? result.data?.reply
               : 'Thanks for reaching out to Real Estate Brothers group. Our team will get back to you shortly.';
 
-            // If site visit was just created, append confirmation
-            if (siteVisitCreated && siteVisitCreated.visit) {
-              const confirmAddon = `\n\n📅 *Site Visit Request Recorded:*\nWe have submitted your request to visit *${visitDetails.projectName}* (${visitDetails.plotCode ? `Plot ${visitDetails.plotCode}` : 'Unit'}) on *${visitDetails.date}* at *${visitDetails.time}* for owner confirmation. You will receive an official confirmation message once reviewed! ✅`;
-              if (!reply.includes('Site Visit Request Recorded')) {
-                reply += confirmAddon;
-              }
-            }
-
             console.log(`[whatsapp] sending reply to ${phone}: "${reply}"`);
-            const raw = await graphSendText(phone, reply);
-            console.log('[whatsapp] reply sent successfully');
+            const raw = await graphSendText(phone, reply).catch((err) => {
+              console.warn('[whatsapp] outbound send warning:', err?.message || err);
+              return null;
+            });
+            console.log('[whatsapp] reply processed');
 
             await supabaseAdminPost('whatsapp_messages', {
               conversation_id: conversation.id,
