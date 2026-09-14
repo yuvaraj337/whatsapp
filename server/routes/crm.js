@@ -44,6 +44,99 @@ export function cleanCustomerNote(raw) {
   return unique || '-';
 }
 
+export function cleanVisitNote(raw) {
+  if (!raw) return '-';
+  let str = String(raw).trim();
+  if (!str) return '-';
+
+  // 1. Extract note candidate from 'Query: "..."' or 'Notes: ...'
+  let candidate = '';
+  const queryMatch = str.match(/Query:\s*["']([^"'\n]+)["']/i);
+  const notesMatch = str.match(/\bNotes?:\s*([^|\n]+)/i);
+
+  if (queryMatch) {
+    candidate = queryMatch[1].trim();
+  } else if (notesMatch) {
+    candidate = notesMatch[1].trim();
+  } else {
+    // If it is a system-generated site visit string without custom notes/query, return '-'
+    if (/^(?:\[?(?:Website|WhatsApp|Offline)\s*(?:AI\s*)?Site\s*Visit\]?)/i.test(str)) {
+      const after = str.replace(/^(?:\[?(?:Website|WhatsApp|Offline)\s*(?:AI\s*)?Site\s*Visit\]?)\s*:?/i, '').trim();
+      if (!after || /^Project:\s*/i.test(after)) return '-';
+      candidate = after;
+    } else {
+      candidate = str;
+    }
+  }
+
+  // If candidate is purely system text like 'Booked via ...' without query
+  if (/^Booked via (?:WhatsApp Agent|Website AI Chatbot|Website Site Visit form)/i.test(candidate) && !queryMatch) {
+    return '-';
+  }
+
+  let text = candidate;
+
+  // Strip bracketed system tags
+  text = text.replace(/\[(?:Website Site Visit|WhatsApp AI Site Visit|Offline Site Visit|Website Enquiry|Contact Enquiry|Offline|BOOKED|AUTO-CAPTURED[^\]]*)\]/gi, ' ');
+  text = text.replace(/\[Customer Updated Details\]:[^|\n]*/gi, ' ');
+
+  // Strip system prefixes and booking agent sentences
+  text = text.replace(/(?:WhatsApp|Website AI|Website|Offline)\s*Site\s*Visit:?[^|\n]*/gi, ' ');
+  text = text.replace(/Booked via (?:WhatsApp Agent|Website AI Chatbot|Website Site Visit form)[^|\n.]*\.?/gi, ' ');
+  text = text.replace(/(?:VR\s+)?(?:Green\s+Meadows|Green\s+Villas|Luxury\s+Villas|Elite\s+Towers|Nature's\s+Nest|Prime\s+Meadows|Heights|Agro\s+Lands|Amodha\s+Plots)[^|\n,]*/gi, ' ');
+  text = text.replace(/\([A-Za-z0-9-]+\)/gi, ' ');
+  text = text.replace(/\b(?:P\d+|V\d+|A-\d+|B-\d+|F-\d+)\b/gi, ' ');
+
+  // Strip contact details
+  text = text.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, ' ');
+  text = text.replace(/(?:\+?91|0)?[-\s]?[6-9]\d{9}\b/g, ' ');
+  text = text.replace(/\b\d{10,12}\b/g, ' ');
+  text = text.replace(/(?:my\s+)?phone(?:\s+number)?\s+(?:is|=)\s*[^,\n|]*/gi, ' ');
+  text = text.replace(/(?:my\s+)?email(?:\s+address)?\s+(?:is|=)\s*[^,\n|]*/gi, ' ');
+  text = text.replace(/(?:my\s+)?name\s+(?:is|=)\s*[^,\n|]*/gi, ' ');
+
+  // Strip system booking boilerplate sentences
+  text = text.replace(/(?:can\s+you|please|could\s+you|i\s+want\s+to|would\s+like\s+to)?\s*book\s+(?:a\s+)?(?:free\s+)?site\s*visit\s*(?:for\s+)?(?:plot\s*|villa\s*|apartment\s*)?(?:[A-Za-z0-9-]+)?/gi, ' ');
+  text = text.replace(/(?:schedule|arrang(?:e|ing)|confirm(?:ing)?)\s+(?:a\s+)?site\s*visit\s*(?:for\s+[^,\n|]*)?/gi, ' ');
+  text = text.replace(/\b(?:tomorrow|today|day after tomorrow|yesterday|morning|afternoon|evening|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?|\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+(?:\s+\d{4})?)\b/gi, ' ');
+  text = text.replace(/created from website (?:enquiry|contact|site visit) form\.?/gi, ' ');
+  text = text.replace(/Site visit scheduled for [^|\n]*/gi, ' ');
+  text = text.replace(/Offline customer for property [^|\n]*/gi, ' ');
+  text = text.replace(/(?:Customer Note|Message|Remarks|Notes?):\s*/gi, ' ');
+
+  // Clean delimiters (preserve compound word hyphens like east-facing)
+  text = text.replace(/[|—]+/g, ' ').replace(/\s+-\s+/g, ' ').replace(/\s+/g, ' ').trim();
+
+  // If starts with long filler, strip conversational filler
+  text = text.replace(/^(?:customer\s+wants\s+to\s+visit\s+(?:the\s+)?plot\s+because\s+(?:they\s+are\s+)?)/i, '');
+  text = text.replace(/^(?:i\s+want\s+to\s+see\s+(?:the\s+)?)/i, '');
+  text = text.replace(/^(?:i\s+(?:want|would\s+like)\s+to\s+visit\s+(?:the\s+)?)/i, '');
+  text = text.replace(/^(?:please\s+note\s+(?:that\s+)?)/i, '');
+
+  const words = text.split(/\s+/).filter(w => {
+    const clean = w.toLowerCase().replace(/[^a-z0-9]/g, '');
+    return clean && !/^(?:none|nil|na|null|undefined|-)$/i.test(clean);
+  });
+
+  if (!words.length) return '-';
+
+  // If remaining words are purely residual generic intent words
+  if (words.every(w => /^(?:i|want|would|like|to|visit|site|plot|unit|property|booking|book|please|can|you|the|for|at|p\d+|v\d+|a\d+)$/i.test(w))) {
+    return '-';
+  }
+
+  // Cap at 4-5 words maximum (Requirement 3 & 8)
+  let cappedWords = words.slice(0, 5);
+  let res = cappedWords.join(' ');
+
+  // Remove trailing punctuation
+  res = res.replace(/[.,;:]+$/, '').trim();
+
+  if (!res) return '-';
+
+  return res.charAt(0).toUpperCase() + res.slice(1);
+}
+
 export function parseBookingFinancials(booking, defaultListedPrice = 0) {
   if (!booking) {
     const p = Number(defaultListedPrice) || 0;
@@ -803,7 +896,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
         ...v,
         status: currentStatus,
         properties: updatedProps,
-        customer_note: cleanCustomerNote(v.notes)
+        customer_note: cleanVisitNote(v.notes)
       };
     });
     if (status === 'BOOKED') {
