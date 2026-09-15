@@ -1,5 +1,5 @@
 import { supabaseAdminGet, supabaseAdminPatch, supabaseAdminPost } from '../lib/supabaseAdmin.js';
-import { getAllReviews, updateReview, ingestGoogleReviews } from './reviews.js';
+import { getAllReviews, updateReview, ingestGoogleReviews, createFeedbackRequest } from './reviews.js';
 
 const LEAD_STATUSES = ['new', 'contacted', 'interested', 'qualified', 'site_visit', 'negotiation', 'converted', 'won', 'lost'];
 const INVENTORY_STATUSES = ['AVAILABLE', 'HOLD', 'RESERVED', 'BOOKED', 'SOLD', 'BLOCKED'];
@@ -1585,20 +1585,143 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
 
   /*
    * ==========================================
+   * CUSTOMER FEEDBACK (CRM Action)
+   * Owner generates & sends unique feedback link to customer
+   * ==========================================
+   */
+  if (req.method === 'POST' && section === 'feedback' && (id === 'send' || !id)) {
+    const siteVisitId = clean(body.site_visit_id);
+    const bookingId = clean(body.booking_id);
+
+    if (!siteVisitId && !bookingId) {
+      return bad('Either site_visit_id or booking_id is required to send feedback.', 'MISSING_TRANSACTION_ID');
+    }
+
+    let lead = null;
+    let property = null;
+    let siteVisit = null;
+    let booking = null;
+
+    if (siteVisitId) {
+      const visits = await supabaseAdminGet('site_visits', {
+        select: 'id,lead_id,property_id,status,notes,scheduled_at',
+        id: `eq.${siteVisitId}`,
+        limit: '1'
+      }).catch(() => []);
+      siteVisit = visits[0];
+      if (!siteVisit) return { status: 404, error: { code: 'SITE_VISIT_NOT_FOUND', message: 'Site visit not found.' } };
+      lead = await leadById(siteVisit.lead_id);
+      if (siteVisit.property_id) property = await propertyById(siteVisit.property_id);
+    } else if (bookingId) {
+      const bks = await supabaseAdminGet('bookings', {
+        select: 'id,lead_id,property_id,status,notes,booking_reference',
+        id: `eq.${bookingId}`,
+        limit: '1'
+      }).catch(() => []);
+      booking = bks[0];
+      if (!booking) return { status: 404, error: { code: 'BOOKING_NOT_FOUND', message: 'Booking not found.' } };
+      lead = await leadById(booking.lead_id);
+      if (booking.property_id) property = await propertyById(booking.property_id);
+    }
+
+    if (!lead || !lead.phone) {
+      return bad('Customer record or phone number is missing for this transaction.', 'MISSING_CUSTOMER_PHONE');
+    }
+
+    const projectName = property?.projects?.name || property?.title || 'VR Real Estates';
+    const propertyCode = property?.property_code || '';
+
+    // Generate secure random token
+    const feedbackRequest = await createFeedbackRequest({
+      lead_id: lead.id,
+      customer_name: lead.name || 'Valued Customer',
+      customer_phone: lead.phone,
+      customer_email: lead.email || '',
+      site_visit_id: siteVisit?.id || null,
+      booking_id: booking?.id || null,
+      property_id: property?.id || null,
+      project_id: property?.project_id || null,
+      project_name: projectName,
+      property_code: propertyCode
+    });
+
+    // Derive public website feedback URL
+    const reqOrigin = req.headers.origin || '';
+    let host = req.headers['x-forwarded-host'] || req.headers.host || '';
+    let proto = req.headers['x-forwarded-proto'] || (host.startsWith('localhost') || host.startsWith('127.0.0.1') ? 'http' : 'https');
+    let baseUrl = reqOrigin;
+    if (!baseUrl && host) {
+      baseUrl = `${proto}://${host}`;
+    }
+    if (!baseUrl) {
+      baseUrl = 'http://localhost:5173';
+    }
+    const feedbackUrl = `${baseUrl}/#/feedback/${feedbackRequest.token}`;
+
+    // Format WhatsApp message
+    const firstName = (lead.name || 'there').trim().split(/\s+/)[0];
+    const messageBody =
+      `Hi ${firstName},\n\n` +
+      `Thank you for choosing us.\n\n` +
+      `We'd love to hear about your experience.\n\n` +
+      `Please share your feedback:\n` +
+      `${feedbackUrl}\n\n` +
+      `Thank you,\n` +
+      `Real Estate Brothers Group`;
+
+    let whatsappSent = false;
+    let whatsappError = null;
+
+    try {
+      const conv = await getOrCreateConversation(lead.id, lead.phone);
+      if (conv) {
+        await writeOutbound(conv, messageBody);
+        whatsappSent = true;
+      } else {
+        await sendWhatsApp(lead.phone, messageBody);
+        whatsappSent = true;
+      }
+    } catch (err) {
+      console.error('[crm-feedback] WhatsApp send failed:', err?.message || err);
+      whatsappError = err?.message || 'Failed to dispatch WhatsApp message.';
+    }
+
+    return {
+      status: 200,
+      data: {
+        success: true,
+        token: feedbackRequest.token,
+        feedback_url: feedbackUrl,
+        whatsapp_sent: whatsappSent,
+        whatsapp_error: whatsappError,
+        customer_name: lead.name,
+        customer_phone: lead.phone
+      }
+    };
+  }
+
+  /*
+   * ==========================================
    * REVIEWS (CRM Management)
    * ==========================================
    */
   if (req.method === 'GET' && section === 'reviews') {
     const reviews = await getAllReviews();
     const pendingCount = reviews.filter((r) => r.status === 'PENDING').length;
-    const approvedCount = reviews.filter((r) => r.status === 'APPROVED' && r.is_visible).length;
+    const needsAttentionCount = reviews.filter((r) => r.status === 'NEEDS ATTENTION').length;
+    const newCount = reviews.filter((r) => r.status === 'NEW').length;
+    const approvedCount = reviews.filter((r) => (r.status === 'APPROVED' || r.status === 'APPROVED FOR WEBSITE') && Boolean(r.is_visible)).length;
+    const hiddenCount = reviews.filter((r) => r.status === 'HIDDEN' || !r.is_visible).length;
     return {
       status: 200,
       data: {
         reviews,
         total_count: reviews.length,
         pending_count: pendingCount,
-        approved_count: approvedCount
+        needs_attention_count: needsAttentionCount,
+        new_count: newCount,
+        approved_count: approvedCount,
+        hidden_count: hiddenCount
       }
     };
   }

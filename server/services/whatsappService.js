@@ -267,3 +267,28 @@ export async function sendBookingNotificationToOwner({
 
   return sendWhatsAppMessage(ownerPhone, messageBody);
 }
+
+/**
+ * Sends a customer feedback request message via WhatsApp.
+ *
+ * @param {Object} details
+ * @param {string} details.phone - Customer phone
+ * @param {string} details.name - Customer name
+ * @param {string} details.feedbackUrl - Secure feedback link
+ * @returns {Promise<{success: boolean, messageId?: string, error?: string}>}
+ */
+export async function sendFeedbackRequestToCustomer({ phone, name, feedbackUrl }) {
+  const customerName = (name || 'Valued Customer').trim();
+  const firstName = customerName.split(/\s+/)[0] || 'there';
+
+  const messageBody =
+    `Hi ${firstName},\n\n` +
+    `Thank you for choosing us.\n\n` +
+    `We'd love to hear about your experience.\n\n` +
+    `Please share your feedback:\n` +
+    `${feedbackUrl}\n\n` +
+    `Thank you,\n` +
+    `Real Estate Brothers Group`;
+
+  return sendWhatsAppMessage(phone, messageBody);
+}

@@ -6,6 +6,7 @@ import { renderApartmentsPage } from './pages/apartmentsJourney.js';
 import { renderVillasPage } from './pages/villasJourney.js';
 import { renderFarmlandsPage } from './pages/farmlandsJourney.js';
 import { renderCrmPage } from './pages/crmDashboard.js';
+import { renderCustomerFeedbackPage } from './pages/customerFeedback.js';
 import './components/aiAssistant.js';
 import '../styles/aiAssistant.css';
 import {
@@ -60,11 +61,21 @@ function router() {
   // Scroll to top on route change
   window.scrollTo(0, 0);
 
-  // Remove website AI Chatbot launcher on CRM Dashboard, restore on public website
+  // Remove website AI Chatbot launcher on CRM Dashboard & Customer Feedback page, restore on public website
   const isCrmRoute = cleanPath === '/crm' || cleanPath.startsWith('/crm');
+  const isFeedbackRoute = cleanPath === '/feedback' || cleanPath.startsWith('/feedback');
   const aiAssistantEl = document.getElementById('vr-ai-assistant');
   if (aiAssistantEl) {
-    aiAssistantEl.style.display = isCrmRoute ? 'none' : '';
+    aiAssistantEl.style.display = (isCrmRoute || isFeedbackRoute) ? 'none' : '';
+  }
+
+  // Dynamic customer feedback route: /feedback/:token
+  if (cleanPath.startsWith('/feedback/')) {
+    const token = cleanPath.replace('/feedback/', '').trim();
+    const page = renderCustomerFeedbackPage(token);
+    appEl.innerHTML = page.html;
+    if (page.init) page.init();
+    return;
   }
 
   // Exact route match

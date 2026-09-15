@@ -344,6 +344,7 @@ function shell(bodyContent) {
   };
 
   const pendingEnquiriesCount = S.enquiries.filter((e) => (e.status || 'NEW') === 'NEW' || e.status === 'PENDING').length;
+  const pendingReviewsCount = S.reviews.filter((r) => r.status === 'PENDING' || r.status === 'NEEDS ATTENTION' || r.status === 'NEW').length;
 
   return `
     <main class="crm-app">
@@ -363,7 +364,7 @@ function shell(bodyContent) {
               <span>${n[1]}</span>
               ${n[0] === 'visits' && S.summary?.siteVisitRequests ? `<em>${S.summary.siteVisitRequests}</em>` : ''}
               ${n[0] === 'enquiries' && pendingEnquiriesCount ? `<em>${pendingEnquiriesCount}</em>` : ''}
-              ${n[0] === 'reviews' && S.summary?.pendingReviews ? `<em>${S.summary.pendingReviews}</em>` : ''}
+              ${n[0] === 'reviews' && pendingReviewsCount ? `<em>${pendingReviewsCount}</em>` : ''}
             </button>
           `).join('')}
         </nav>
@@ -881,8 +882,11 @@ function renderVisitRows(rows) {
               <button class="crm-action" data-complete-visit="${v.id}">Complete</button>
               <button class="crm-action" data-reschedule-visit="${v.id}">Reschedule</button>
               <button class="crm-action danger" data-cancel-visit="${v.id}">Cancel</button>
+            ` : v.status === 'COMPLETED' ? `
+              <button class="crm-action" data-send-feedback-visit="${v.id}" style="background: #f0fdf4; color: #166534; border: 1px solid #86efac; font-weight: 600;" title="Send customer feedback link via WhatsApp">★ Send Feedback</button>
             ` : v.status === 'BOOKED' ? `
-              <span style="font-size: 11px; color: #16a34a; font-weight: 700;">✓ Booked</span>
+              <button class="crm-action" data-send-feedback-visit="${v.id}" style="background: #f0fdf4; color: #166534; border: 1px solid #86efac; font-weight: 600;" title="Send customer feedback link via WhatsApp">★ Send Feedback</button>
+              <span style="font-size: 11px; color: #16a34a; font-weight: 700; align-self: center;">✓ Booked</span>
             ` : '—'}
           </div>
         </td>
@@ -959,7 +963,10 @@ function renderVisitCards(rows) {
             <button class="crm-action" data-visit-book="${v.id}" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;" title="Customer booked this plot">★ Book</button>
             <button class="crm-action" data-complete-visit="${v.id}">Complete</button>
             <button class="crm-action danger" data-cancel-visit="${v.id}">Cancel</button>
+          ` : v.status === 'COMPLETED' ? `
+            <button class="crm-action" data-send-feedback-visit="${v.id}" style="background: #f0fdf4; color: #166534; border: 1px solid #86efac; font-weight: 600;" title="Send customer feedback link via WhatsApp">★ Send Feedback</button>
           ` : v.status === 'BOOKED' ? `
+            <button class="crm-action" data-send-feedback-visit="${v.id}" style="background: #f0fdf4; color: #166534; border: 1px solid #86efac; font-weight: 600;" title="Send customer feedback link via WhatsApp">★ Send Feedback</button>
             <span style="font-size: 12px; color: #16a34a; font-weight: 700; padding: 6px;">✓ Booked</span>
           ` : '—'}
         </div>
@@ -1406,12 +1413,14 @@ function renderBookingRows(rows) {
         <td><span class="crm-badge">${esc(src)}</span></td>
         <td><span class="crm-badge ${cls(b.status)}">${label(b.status)}</span></td>
         <td>
-          <div style="display: flex; gap: 6px;">
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
             ${b.status === 'CONFIRMED' || b.status === 'PENDING' ? `
               <button class="crm-action success" data-booking-complete="${b.id}" title="Mark sale completed &amp; mark plot SOLD">Complete</button>
               <button class="crm-action danger" data-booking-cancel="${b.id}" title="Cancel booking &amp; release plot back to AVAILABLE">Cancel</button>
+              <button class="crm-action" data-send-feedback-booking="${b.id}" style="background:#f0fdf4; color:#166534; border:1px solid #86efac; font-weight:600;" title="Send customer feedback link via WhatsApp">★ Feedback</button>
             ` : b.status === 'COMPLETED' ? `
-              <span style="font-size: 11px; color: #16a34a; font-weight: 700;">✓ Completed (Sold)</span>
+              <button class="crm-action" data-send-feedback-booking="${b.id}" style="background:#f0fdf4; color:#166534; border:1px solid #86efac; font-weight:600;" title="Send customer feedback link via WhatsApp">★ Send Feedback</button>
+              <span style="font-size: 11px; color: #16a34a; font-weight: 700; align-self: center;">✓ Completed (Sold)</span>
             ` : `
               <span style="font-size: 11px; color: #dc2626; font-weight: 700;">Cancelled (Released)</span>
             `}
@@ -1486,7 +1495,9 @@ function renderBookingCards(rows) {
           ${b.status === 'CONFIRMED' || b.status === 'PENDING' ? `
             <button class="crm-action success" data-booking-complete="${b.id}" title="Complete sale">Complete (Sold)</button>
             <button class="crm-action danger" data-booking-cancel="${b.id}" title="Cancel booking">Cancel (Release Plot)</button>
+            <button class="crm-action" data-send-feedback-booking="${b.id}" style="background:#f0fdf4; color:#166534; border:1px solid #86efac; font-weight:600;" title="Send customer feedback link via WhatsApp">★ Send Feedback</button>
           ` : b.status === 'COMPLETED' ? `
+            <button class="crm-action" data-send-feedback-booking="${b.id}" style="background:#f0fdf4; color:#166534; border:1px solid #86efac; font-weight:600;" title="Send customer feedback link via WhatsApp">★ Send Feedback</button>
             <span style="font-size: 12px; color: #16a34a; font-weight: 700; padding: 6px;">✓ Completed (Sold)</span>
           ` : `
             <span style="font-size: 12px; color: #dc2626; font-weight: 700; padding: 6px;">Cancelled (Released)</span>
@@ -1573,49 +1584,63 @@ function reviews() {
     if (S.reviewFilter !== 'ALL') {
       if (S.reviewFilter === 'SHOW' && !r.is_visible) return false;
       if (S.reviewFilter === 'HIDE' && r.is_visible) return false;
-      if (S.reviewFilter !== 'SHOW' && S.reviewFilter !== 'HIDE' && r.status !== S.reviewFilter) return false;
+      if (S.reviewFilter === 'NEEDS_ATTENTION' && r.status !== 'NEEDS ATTENTION') return false;
+      if (S.reviewFilter === 'NEW' && r.status !== 'NEW') return false;
+      if (S.reviewFilter !== 'SHOW' && S.reviewFilter !== 'HIDE' && S.reviewFilter !== 'NEEDS_ATTENTION' && S.reviewFilter !== 'NEW' && r.status !== S.reviewFilter) return false;
     }
-    if (q && ![r.reviewer_name, r.review_text, r.project_name, r.source].some((v) => String(v || '').toLowerCase().includes(q))) {
+    if (q && ![r.reviewer_name, r.review_text, r.project_name, r.source, r.property_code].some((v) => String(v || '').toLowerCase().includes(q))) {
       return false;
     }
     return true;
   });
 
   const totalCount = S.reviews.length;
+  const needsAttentionCount = S.reviews.filter((r) => r.status === 'NEEDS ATTENTION').length;
+  const newCount = S.reviews.filter((r) => r.status === 'NEW').length;
   const pendingCount = S.reviews.filter((r) => r.status === 'PENDING').length;
-  const approvedCount = S.reviews.filter((r) => r.status === 'APPROVED' && r.is_visible).length;
+  const approvedCount = S.reviews.filter((r) => (r.status === 'APPROVED' || r.status === 'APPROVED FOR WEBSITE') && Boolean(r.is_visible)).length;
   const hiddenCount = S.reviews.filter((r) => r.status === 'HIDDEN' || !r.is_visible).length;
 
   return `
     <div class="crm-toolbar">
       <div class="crm-search">
         <span>⌕</span>
-        <input id="review-search" value="${esc(S.search)}" placeholder="Search reviewer, text, or project…">
+        <input id="review-search" value="${esc(S.search)}" placeholder="Search customer, feedback text, project, or plot…">
       </div>
       <select id="review-filter">
-        <option value="ALL" ${S.reviewFilter === 'ALL' ? 'selected' : ''}>All Reviews (${totalCount})</option>
-        <option value="PENDING" ${S.reviewFilter === 'PENDING' ? 'selected' : ''}>Pending Approval (${pendingCount})</option>
-        <option value="APPROVED" ${S.reviewFilter === 'APPROVED' ? 'selected' : ''}>Approved &amp; Live (${approvedCount})</option>
+        <option value="ALL" ${S.reviewFilter === 'ALL' ? 'selected' : ''}>All Feedback &amp; Reviews (${totalCount})</option>
+        <option value="NEEDS_ATTENTION" ${S.reviewFilter === 'NEEDS_ATTENTION' ? 'selected' : ''}>⚠️ Needs Attention (${needsAttentionCount})</option>
+        <option value="NEW" ${S.reviewFilter === 'NEW' ? 'selected' : ''}>New Feedback (${newCount})</option>
+        <option value="PENDING" ${S.reviewFilter === 'PENDING' ? 'selected' : ''}>Pending Google (${pendingCount})</option>
+        <option value="APPROVED" ${S.reviewFilter === 'APPROVED' ? 'selected' : ''}>Approved for Website (${approvedCount})</option>
         <option value="HIDDEN" ${S.reviewFilter === 'HIDDEN' ? 'selected' : ''}>Hidden (${hiddenCount})</option>
       </select>
       <button class="crm-primary" id="sync-google-reviews">↻ Sync Google Reviews</button>
     </div>
 
-    <div class="crm-overview-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 20px;">
+    <div class="crm-overview-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 20px;">
       <article class="crm-stat">
         <div class="crm-stat-icon">★</div>
         <div>
-          <span>Total Reviews</span>
+          <span>Total Records</span>
           <strong>${totalCount}</strong>
-          <small>Google &amp; Direct Sources</small>
+          <small>Customer &amp; Google Reviews</small>
+        </div>
+      </article>
+      <article class="crm-stat" style="${needsAttentionCount > 0 ? 'border-left: 4px solid #ef4444; background: #fff5f5;' : ''}">
+        <div class="crm-stat-icon" style="color: #ef4444;">⚠️</div>
+        <div>
+          <span>Needs Attention</span>
+          <strong style="color: ${needsAttentionCount > 0 ? '#dc2626' : '#64748b'};">${needsAttentionCount}</strong>
+          <small>1–3 Star Feedbacks</small>
         </div>
       </article>
       <article class="crm-stat">
-        <div class="crm-stat-icon" style="color: #f59e0b;">⏳</div>
+        <div class="crm-stat-icon" style="color: #3b82f6;">✉</div>
         <div>
-          <span>Pending Approval</span>
-          <strong style="color: #d97706;">${pendingCount}</strong>
-          <small>Awaiting Owner Approval</small>
+          <span>New Feedback</span>
+          <strong style="color: #2563eb;">${newCount}</strong>
+          <small>Unreviewed 4–5★</small>
         </div>
       </article>
       <article class="crm-stat">
@@ -1623,7 +1648,7 @@ function reviews() {
         <div>
           <span>Live on Website</span>
           <strong style="color: #059669;">${approvedCount}</strong>
-          <small>Approved &amp; Visible</small>
+          <small>Approved Testimonials</small>
         </div>
       </article>
       <article class="crm-stat">
@@ -1631,7 +1656,7 @@ function reviews() {
         <div>
           <span>Hidden</span>
           <strong>${hiddenCount}</strong>
-          <small>Suppressed from Public</small>
+          <small>Private to CRM</small>
         </div>
       </article>
     </div>
@@ -1639,8 +1664,8 @@ function reviews() {
     <section class="crm-card">
       <div class="crm-card-head">
         <div>
-          <h2>Review Approval Management</h2>
-          <p>Only reviews marked as <strong>APPROVED</strong> and <strong>SHOW</strong> appear on the public website.</p>
+          <h2>Customer Feedback &amp; Testimonial Management</h2>
+          <p>Review customer feedback from site visits &amp; bookings. Owner approval is required to display testimonials publicly.</p>
         </div>
       </div>
 
@@ -1649,14 +1674,14 @@ function reviews() {
         <table>
           <thead>
             <tr>
-              <th>Reviewer</th>
+              <th>Customer</th>
               <th>Rating</th>
-              <th>Review Text</th>
-              <th>Project / Unit</th>
+              <th>Feedback</th>
+              <th>Project</th>
+              <th>Property/Plot</th>
               <th>Source</th>
-              <th>Status</th>
-              <th>Website Visibility</th>
               <th>Date</th>
+              <th>Status</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -1676,12 +1701,13 @@ function reviews() {
 
 function renderReviewRows(rows) {
   if (!rows.length) {
-    return `<tr><td colspan="9"><div class="crm-empty">No reviews match your filter.</div></td></tr>`;
+    return `<tr><td colspan="9"><div class="crm-empty">No feedback or reviews match this filter.</div></td></tr>`;
   }
   return rows.map((r) => {
-    const isApproved = r.status === 'APPROVED';
+    const isApproved = r.status === 'APPROVED' || r.status === 'APPROVED FOR WEBSITE';
     const isVisible = Boolean(r.is_visible);
     const starStr = '★'.repeat(Math.min(5, Math.max(1, r.rating || 5))) + '☆'.repeat(Math.max(0, 5 - Math.min(5, Math.max(1, r.rating || 5))));
+    const cleanFeedback = String(r.review_text || '').trim() || '-';
 
     return `
       <tr>
@@ -1689,49 +1715,53 @@ function renderReviewRows(rows) {
           <div class="crm-person">
             <span>${initials(r.reviewer_name)}</span>
             <div>
-              <b>${esc(r.reviewer_name || 'Google User')}</b>
-              <small>${esc(r.source || 'Google')}</small>
+              <b>${esc(r.reviewer_name || 'Customer')}</b>
+              <small>${esc(r.source || 'Direct')}</small>
             </div>
           </div>
         </td>
         <td style="color: #f59e0b; font-weight: 700; white-space: nowrap;">
           ${starStr} <small style="color:#6b7280;">(${r.rating || 5}/5)</small>
         </td>
-        <td style="max-width: 280px; white-space: normal; line-height: 1.45; font-size: 13px;">
-          ${esc(r.review_text || '')}
+        <td style="max-width: 260px; white-space: normal; line-height: 1.45; font-size: 13px;">
+          ${esc(cleanFeedback)}
         </td>
         <td>
           <b>${esc(r.project_name || 'VR Real Estates')}</b>
-          ${r.property_code ? `<small class="crm-cell-sub">Plot ${esc(r.property_code)}</small>` : ''}
         </td>
         <td>
-          <span class="crm-badge" style="background:#e0f2fe; color:#0369a1;">${esc(r.source || 'Google')}</span>
+          ${r.property_code ? `<b>Plot ${esc(r.property_code)}</b>` : '—'}
         </td>
         <td>
-          <span class="crm-badge ${cls(r.status)}">${label(r.status)}</span>
-        </td>
-        <td>
-          <span class="crm-badge" style="${isVisible ? 'background:#dcfce7; color:#15803d;' : 'background:#fee2e2; color:#b91c1c;'}">
-            ${isVisible ? '● SHOW' : '○ HIDE'}
-          </span>
+          <span class="crm-badge" style="background:#e0f2fe; color:#0369a1;">${esc(r.source || 'Direct')}</span>
         </td>
         <td>${date(r.review_date || r.created_at)}</td>
         <td>
+          <span class="crm-badge ${cls(r.status)}">${label(r.status)}</span>
+          ${isVisible ? `<span class="crm-badge" style="background:#dcfce7; color:#15803d; margin-top:3px; display:inline-block;">● LIVE</span>` : ''}
+        </td>
+        <td>
           <div style="display: flex; gap: 6px; flex-wrap: wrap;">
             ${!isApproved || !isVisible ? `
-              <button class="crm-small-btn" data-review-approve="${r.id}" style="background:#dcfce7; border-color:#22c55e; color:#15803d; font-weight:600;">
-                ✓ Approve &amp; Show
+              <button class="crm-small-btn" data-review-approve="${r.id}" style="background:#dcfce7; border-color:#22c55e; color:#15803d; font-weight:600;" title="Approve this review for website display">
+                ✓ Approve for Website
               </button>
             ` : ''}
             ${isVisible ? `
-              <button class="crm-small-btn" data-review-hide="${r.id}" style="background:#fee2e2; border-color:#ef4444; color:#b91c1c;">
+              <button class="crm-small-btn" data-review-hide="${r.id}" style="background:#fee2e2; border-color:#ef4444; color:#b91c1c;" title="Hide from public website">
                 Hide
               </button>
-            ` : `
-              <button class="crm-small-btn" data-review-show="${r.id}">
-                Show
+            ` : ''}
+            ${r.status === 'NEEDS ATTENTION' ? `
+              <button class="crm-small-btn" data-review-resolve="${r.id}" style="background:#fef3c7; border-color:#f59e0b; color:#92400e;" title="Mark customer concern as resolved">
+                Mark Resolved
               </button>
-            `}
+            ` : ''}
+            ${r.status === 'NEW' ? `
+              <button class="crm-small-btn" data-review-reviewed="${r.id}" style="color:#475569;" title="Mark as reviewed">
+                Mark Reviewed
+              </button>
+            ` : ''}
           </div>
         </td>
       </tr>
@@ -1741,12 +1771,13 @@ function renderReviewRows(rows) {
 
 function renderReviewCards(rows) {
   if (!rows.length) {
-    return `<div class="crm-empty">No reviews match your filter.</div>`;
+    return `<div class="crm-empty">No feedback or reviews match this filter.</div>`;
   }
   return rows.map((r) => {
-    const isApproved = r.status === 'APPROVED';
+    const isApproved = r.status === 'APPROVED' || r.status === 'APPROVED FOR WEBSITE';
     const isVisible = Boolean(r.is_visible);
     const starStr = '★'.repeat(Math.min(5, Math.max(1, r.rating || 5))) + '☆'.repeat(Math.max(0, 5 - Math.min(5, Math.max(1, r.rating || 5))));
+    const cleanFeedback = String(r.review_text || '').trim() || '-';
 
     return `
       <div class="crm-record-card">
@@ -1754,11 +1785,14 @@ function renderReviewCards(rows) {
           <div class="crm-record-head-info">
             <span class="crm-avatar">${initials(r.reviewer_name)}</span>
             <div>
-              <b style="font-size: 14px; color: #173f2c;">${esc(r.reviewer_name || 'Google User')}</b>
-              <small class="crm-cell-sub">${esc(r.source || 'Google')}</small>
+              <b style="font-size: 14px; color: #173f2c;">${esc(r.reviewer_name || 'Customer')}</b>
+              <small class="crm-cell-sub">${esc(r.source || 'Direct')}</small>
             </div>
           </div>
-          <span class="crm-badge ${cls(r.status)}">${label(r.status)}</span>
+          <div style="display: flex; gap: 4px; flex-direction: column; align-items: flex-end;">
+            <span class="crm-badge ${cls(r.status)}">${label(r.status)}</span>
+            ${isVisible ? `<span class="crm-badge" style="background:#dcfce7; color:#15803d;">● LIVE</span>` : ''}
+          </div>
         </div>
         <div class="crm-record-body">
           <div class="crm-record-row">
@@ -1766,33 +1800,39 @@ function renderReviewCards(rows) {
             <span class="crm-record-row-val" style="color: #f59e0b;">${starStr} (${r.rating || 5}/5)</span>
           </div>
           <div class="crm-record-row">
-            <span class="crm-record-row-label">Review:</span>
-            <span class="crm-record-row-val" style="font-weight: normal; color: #4b5563;">${esc(r.review_text || '')}</span>
+            <span class="crm-record-row-label">Feedback:</span>
+            <span class="crm-record-row-val" style="font-weight: normal; color: #334155;">${esc(cleanFeedback)}</span>
           </div>
           <div class="crm-record-row">
-            <span class="crm-record-row-label">Visibility:</span>
-            <span class="crm-record-row-val">
-              <span class="crm-badge" style="${isVisible ? 'background:#dcfce7; color:#15803d;' : 'background:#fee2e2; color:#b91c1c;'}">
-                ${isVisible ? '● SHOW' : '○ HIDE'}
-              </span>
-            </span>
+            <span class="crm-record-row-label">Project:</span>
+            <span class="crm-record-row-val">${esc(r.project_name || 'VR Real Estates')}${r.property_code ? ` · Plot ${esc(r.property_code)}` : ''}</span>
+          </div>
+          <div class="crm-record-row">
+            <span class="crm-record-row-label">Date:</span>
+            <span class="crm-record-row-val">${date(r.review_date || r.created_at)}</span>
           </div>
         </div>
         <div class="crm-record-actions">
           ${!isApproved || !isVisible ? `
-            <button class="crm-small-btn" data-review-approve="${r.id}" style="background:#dcfce7; border-color:#22c55e; color:#15803d; font-weight:600;">
-              ✓ Approve &amp; Show
+            <button class="crm-small-btn" data-review-approve="${r.id}" style="background:#dcfce7; border-color:#22c55e; color:#15803d; font-weight:600;" title="Approve this review for website display">
+              ✓ Approve for Website
             </button>
           ` : ''}
           ${isVisible ? `
-            <button class="crm-small-btn" data-review-hide="${r.id}" style="background:#fee2e2; border-color:#ef4444; color:#b91c1c;">
+            <button class="crm-small-btn" data-review-hide="${r.id}" style="background:#fee2e2; border-color:#ef4444; color:#b91c1c;" title="Hide from public website">
               Hide
             </button>
-          ` : `
-            <button class="crm-small-btn" data-review-show="${r.id}">
-              Show
+          ` : ''}
+          ${r.status === 'NEEDS ATTENTION' ? `
+            <button class="crm-small-btn" data-review-resolve="${r.id}" style="background:#fef3c7; border-color:#f59e0b; color:#92400e;" title="Mark customer concern as resolved">
+              Mark Resolved
             </button>
-          `}
+          ` : ''}
+          ${r.status === 'NEW' ? `
+            <button class="crm-small-btn" data-review-reviewed="${r.id}" style="color:#475569;" title="Mark as reviewed">
+              Mark Reviewed
+            </button>
+          ` : ''}
         </div>
       </div>
     `;
@@ -2497,6 +2537,61 @@ function bindEnquiryActions() {
   });
 }
 
+async function sendFeedbackLink({ site_visit_id = null, booking_id = null } = {}) {
+  try {
+    showToast('Generating secure feedback link & sending WhatsApp...');
+    const res = await api('/api/crm/feedback/send', {
+      method: 'POST',
+      body: JSON.stringify({ site_visit_id, booking_id })
+    });
+
+    const msg = res.whatsapp_sent
+      ? `Feedback link sent via WhatsApp to ${res.customer_name || 'customer'} (${res.customer_phone})!`
+      : `Feedback link generated! (WhatsApp note: ${res.whatsapp_error || 'pending delivery'})`;
+
+    showToast(msg);
+
+    modal(`
+      <button class="crm-modal-close" data-close>×</button>
+      <div class="crm-eyebrow">CUSTOMER FEEDBACK LINK</div>
+      <h2>Feedback Link Generated</h2>
+      <p style="color: #475569; font-size: 13px; margin: 4px 0 16px;">
+        ${res.whatsapp_sent ? `Dispatched to <strong>${esc(res.customer_phone)}</strong> via WhatsApp Cloud API.` : 'Unique secure link created.'}
+      </p>
+
+      <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px; margin-bottom: 16px;">
+        <label style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase;">Customer Feedback URL</label>
+        <input 
+          id="copy-fb-url-input" 
+          value="${esc(res.feedback_url)}" 
+          readonly 
+          style="width: 100%; box-sizing: border-box; margin-top: 6px; padding: 8px 10px; font-size: 12px; border: 1px solid #94a3b8; border-radius: 6px; background: #fff;" 
+        />
+      </div>
+
+      <div class="crm-modal-actions" style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button type="button" class="crm-small-btn" data-close>Close</button>
+        <button type="button" class="crm-primary" id="copy-fb-url-btn">📋 Copy Feedback Link</button>
+      </div>
+    `);
+
+    document.getElementById('copy-fb-url-btn')?.addEventListener('click', () => {
+      const el = document.getElementById('copy-fb-url-input');
+      if (el) {
+        navigator.clipboard.writeText(el.value).then(() => {
+          showToast('Feedback link copied to clipboard!');
+        }).catch(() => {
+          el.select();
+          document.execCommand('copy');
+          showToast('Feedback link copied!');
+        });
+      }
+    });
+  } catch (err) {
+    showToast(err.message || 'Failed to send feedback link.', true);
+  }
+}
+
 function bindVisitActions() {
   document.querySelectorAll('[data-confirm-visit]').forEach((x) => {
     x.onclick = async () => {
@@ -2526,6 +2621,11 @@ function bindVisitActions() {
       if (at) await patchVisit(x.dataset.rescheduleVisit, 'RESCHEDULED', at);
     };
   });
+  document.querySelectorAll('[data-send-feedback-visit]').forEach((x) => {
+    x.onclick = async () => {
+      await sendFeedbackLink({ site_visit_id: x.dataset.sendFeedbackVisit });
+    };
+  });
 }
 
 function bindBookingActions() {
@@ -2542,6 +2642,11 @@ function bindBookingActions() {
       }
     };
   });
+  document.querySelectorAll('[data-send-feedback-booking]').forEach((x) => {
+    x.onclick = async () => {
+      await sendFeedbackLink({ booking_id: x.dataset.sendFeedbackBooking });
+    };
+  });
 }
 
 function bindReviewActions() {
@@ -2552,7 +2657,7 @@ function bindReviewActions() {
           method: 'PATCH',
           body: JSON.stringify({ status: 'APPROVED', is_visible: true })
         });
-        showToast('Review approved & visible on website.');
+        showToast('Review approved for website & live.');
         await load();
         render();
       } catch (err) {
@@ -2566,7 +2671,7 @@ function bindReviewActions() {
       try {
         await api(`/api/crm/reviews/${btn.dataset.reviewHide}`, {
           method: 'PATCH',
-          body: JSON.stringify({ is_visible: false })
+          body: JSON.stringify({ status: 'HIDDEN', is_visible: false })
         });
         showToast('Review hidden from website.');
         await load();
@@ -2577,14 +2682,30 @@ function bindReviewActions() {
     };
   });
 
-  document.querySelectorAll('[data-review-show]').forEach((btn) => {
+  document.querySelectorAll('[data-review-resolve]').forEach((btn) => {
     btn.onclick = async () => {
       try {
-        await api(`/api/crm/reviews/${btn.dataset.reviewShow}`, {
+        await api(`/api/crm/reviews/${btn.dataset.reviewResolve}`, {
           method: 'PATCH',
-          body: JSON.stringify({ is_visible: true })
+          body: JSON.stringify({ status: 'RESOLVED' })
         });
-        showToast('Review is now visible on website.');
+        showToast('Customer feedback marked as resolved.');
+        await load();
+        render();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    };
+  });
+
+  document.querySelectorAll('[data-review-reviewed]').forEach((btn) => {
+    btn.onclick = async () => {
+      try {
+        await api(`/api/crm/reviews/${btn.dataset.reviewReviewed}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'REVIEWED' })
+        });
+        showToast('Customer feedback marked as reviewed.');
         await load();
         render();
       } catch (err) {
@@ -2729,9 +2850,11 @@ function bind() {
         if (S.reviewFilter !== 'ALL') {
           if (S.reviewFilter === 'SHOW' && !r.is_visible) return false;
           if (S.reviewFilter === 'HIDE' && r.is_visible) return false;
-          if (S.reviewFilter !== 'SHOW' && S.reviewFilter !== 'HIDE' && r.status !== S.reviewFilter) return false;
+          if (S.reviewFilter === 'NEEDS_ATTENTION' && r.status !== 'NEEDS ATTENTION') return false;
+          if (S.reviewFilter === 'NEW' && r.status !== 'NEW') return false;
+          if (S.reviewFilter !== 'SHOW' && S.reviewFilter !== 'HIDE' && S.reviewFilter !== 'NEEDS_ATTENTION' && S.reviewFilter !== 'NEW' && r.status !== S.reviewFilter) return false;
         }
-        if (q && ![r.reviewer_name, r.review_text, r.project_name, r.source].some((v) => String(v || '').toLowerCase().includes(q))) {
+        if (q && ![r.reviewer_name, r.review_text, r.project_name, r.source, r.property_code].some((v) => String(v || '').toLowerCase().includes(q))) {
           return false;
         }
         return true;

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { handleWhatsApp } from './routes/whatsapp.js';
 import { handleBookings } from './routes/bookings.js';
 import { handleGoogleReviews } from './routes/googleReviews.js';
-import { handlePublicReviews } from './routes/reviews.js';
+import { handlePublicReviews, handlePublicFeedback } from './routes/reviews.js';
 
 const PORT = Number(process.env.API_PORT || 3001);
 
@@ -380,6 +380,46 @@ export async function router(req, res) {
           : { data: result.data },
         origin
       );
+    }
+
+    /*
+     * ==========================================
+     * CUSTOMER FEEDBACK (Public)
+     * ==========================================
+     */
+    if (
+      pathParts[0] === 'api' &&
+      pathParts[1] === 'feedback'
+    ) {
+      let body = {};
+      if (req.method === 'POST') {
+        body = await parseBody(
+          req,
+          res,
+          origin
+        );
+
+        if (body === null) {
+          return;
+        }
+      }
+
+      const result = await handlePublicFeedback(
+        req,
+        pathParts,
+        body
+      );
+
+      if (result) {
+        return sendJson(
+          res,
+          result.status,
+          result.error
+            ? { error: result.error }
+            : { data: result.data },
+          origin
+        );
+      }
     }
 
     /*
