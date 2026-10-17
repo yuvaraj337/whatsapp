@@ -238,7 +238,7 @@ async function inventoryUpdate(id, next, reason = '') {
   if (!property) return { status: 404, error: { code: 'PROPERTY_NOT_FOUND', message: 'Property not found.' } };
   const current = property.inventory_status;
   if (current === next) return { status: 200, data: { property } };
-  
+
   // Complete manual control for owner
   const allowed = {
     AVAILABLE: ['HOLD', 'RESERVED', 'BOOKED', 'BLOCKED', 'SOLD'],
@@ -284,23 +284,25 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
       return true;
     });
 
-    return { status: 200, data: {
-      totalEnquiries: enquiryLeads.length,
-      newEnquiries: enquiryLeads.filter(x => (x.status || 'new') === 'new').length,
-      totalLeads: leads.length,
-      newLeads: leads.filter(x => (x.status || 'new') === 'new').length,
-      qualifiedLeads: leads.filter(x => x.status === 'qualified').length,
-      openConversations: conversations.filter(x => x.status === 'open').length,
-      siteVisitRequests: visits.filter(x => x.status === 'REQUESTED').length,
-      confirmedVisits: visits.filter(x => x.status === 'CONFIRMED').length,
-      inventory: Object.fromEntries(INVENTORY_STATUSES.map(s => [s.toLowerCase(), properties.filter(x => x.inventory_status === s).length])),
-      bookings: bookings.filter(x => x.status === 'CONFIRMED').length,
-      totalBookings: bookings.filter(x => x.status === 'CONFIRMED').length,
-      bookingStatus: Object.fromEntries(BOOKING_STATUSES.map(s => [s, bookings.filter(x => x.status === s).length])),
-      totalReviews: allReviews.length,
-      pendingReviews: allReviews.filter(r => r.status === 'PENDING').length,
-      approvedReviews: allReviews.filter(r => r.status === 'APPROVED' && r.is_visible).length
-    } };
+    return {
+      status: 200, data: {
+        totalEnquiries: enquiryLeads.length,
+        newEnquiries: enquiryLeads.filter(x => (x.status || 'new') === 'new').length,
+        totalLeads: leads.length,
+        newLeads: leads.filter(x => (x.status || 'new') === 'new').length,
+        qualifiedLeads: leads.filter(x => x.status === 'qualified').length,
+        openConversations: conversations.filter(x => x.status === 'open').length,
+        siteVisitRequests: visits.filter(x => x.status === 'REQUESTED').length,
+        confirmedVisits: visits.filter(x => x.status === 'CONFIRMED').length,
+        inventory: Object.fromEntries(INVENTORY_STATUSES.map(s => [s.toLowerCase(), properties.filter(x => x.inventory_status === s).length])),
+        bookings: bookings.filter(x => x.status === 'CONFIRMED').length,
+        totalBookings: bookings.filter(x => x.status === 'CONFIRMED').length,
+        bookingStatus: Object.fromEntries(BOOKING_STATUSES.map(s => [s, bookings.filter(x => x.status === s).length])),
+        totalReviews: allReviews.length,
+        pendingReviews: allReviews.filter(r => r.status === 'PENDING').length,
+        approvedReviews: allReviews.filter(r => r.status === 'APPROVED' && r.is_visible).length
+      }
+    };
   }
 
   /*
@@ -839,7 +841,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
   }
   if (req.method === 'PATCH' && section === 'conversations' && id) {
     const update = {}; if (typeof body.ai_enabled === 'boolean') update.ai_enabled = body.ai_enabled;
-    if (typeof body.status === 'string') { const status = clean(body.status).toLowerCase(); if (!['open','closed'].includes(status)) return bad('Conversation status must be open or closed.', 'INVALID_CONVERSATION_STATUS'); update.status = status; }
+    if (typeof body.status === 'string') { const status = clean(body.status).toLowerCase(); if (!['open', 'closed'].includes(status)) return bad('Conversation status must be open or closed.', 'INVALID_CONVERSATION_STATUS'); update.status = status; }
     if (!Object.keys(update).length) return bad('No conversation fields were supplied.', 'NO_FIELDS');
     update.updated_at = new Date().toISOString(); const rows = await supabaseAdminPatch('whatsapp_conversations', { id: `eq.${id}` }, update);
     if (!rows[0]) return { status: 404, error: { code: 'CONVERSATION_NOT_FOUND', message: 'Conversation not found.' } };
@@ -1479,7 +1481,7 @@ export async function handleCrm(req, pathParts, searchParams, body = {}) {
     else if (subAction === 'confirm') next = 'CONFIRMED';
 
     if (!BOOKING_STATUSES.includes(next)) return bad('Invalid booking status.', 'INVALID_BOOKING_STATUS');
-    const allowed = { PENDING: ['CONFIRMED','CANCELLED'], CONFIRMED: ['COMPLETED','CANCELLED'], COMPLETED: [], CANCELLED: [] };
+    const allowed = { PENDING: ['CONFIRMED', 'CANCELLED'], CONFIRMED: ['COMPLETED', 'CANCELLED'], COMPLETED: [], CANCELLED: [] };
     if (booking.status !== next && !allowed[booking.status]?.includes(next)) return bad(`Invalid booking transition: ${booking.status} → ${next}.`, 'INVALID_BOOKING_TRANSITION');
 
     if (next === 'COMPLETED' && booking.property_id) {

@@ -233,49 +233,63 @@ textarea {
 }
 
 /* ==========================================================================
-   1. SINGLE-BAR HEADER
+   1. FLOATING PILL GLASS HEADER (MATCHING REFERENCE IMAGE 2)
    ========================================================================== */
 .ref-header {
-  background: #FAF8F5;
-  border-bottom: none;
   position: sticky;
-  top: 0;
+  top: 14px;
   z-index: 1000;
-  transition: all 0.3s ease;
+  padding: 0 24px;
+  background: transparent;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .ref-header.scrolled {
-  background: rgba(250, 249, 245, 0.96);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 4px 20px rgba(26, 59, 43, 0.05);
+  top: 8px;
 }
 
 .ref-header-inner {
-  max-width: var(--max-width);
+  max-width: 1420px;
   margin: 0 auto;
-  padding: 0 40px;
-  height: 80px;
+  padding: 6px 8px 6px 18px;
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 9999px;
+  box-shadow: 0 10px 30px -4px rgba(22, 38, 26, 0.07),
+              0 2px 6px -1px rgba(0, 0, 0, 0.03);
+  transition: all 0.3s ease;
+}
+
+.ref-header.scrolled .ref-header-inner {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 14px 36px -4px rgba(22, 38, 26, 0.10),
+              0 2px 8px -1px rgba(0, 0, 0, 0.04);
 }
 
 /* Brand Area */
 .ref-brand-block {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   text-decoration: none;
   flex-shrink: 0;
+  padding-left: 2px;
 }
 
 .ref-brand-logo-img {
-  height: 52px;
-  width: 52px;
+  height: 44px;
+  width: 44px;
   border-radius: 50%;
   object-fit: contain;
   display: block;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 .ref-brand-text {
@@ -285,18 +299,18 @@ textarea {
 
 .ref-brand-title {
   font-family: var(--font-sans);
-  font-size: 1.2rem;
+  font-size: 0.96rem;
   font-weight: 800;
-  letter-spacing: 0.5px;
-  color: #111827;
-  line-height: 1.1;
+  letter-spacing: -0.2px;
+  color: #162C1E;
+  line-height: 1.15;
 }
 
 .ref-brand-subtitle {
-  font-size: 0.65rem;
+  font-size: 0.58rem;
   font-weight: 700;
-  letter-spacing: 1px;
-  color: #9CA3AF;
+  letter-spacing: 0.8px;
+  color: #8C998E;
   text-transform: uppercase;
   margin-top: 2px;
 }
@@ -305,40 +319,73 @@ textarea {
 .ref-nav-menu {
   display: flex;
   align-items: center;
-  gap: 32px;
-}
-
-.ref-nav-link {
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: #374151;
-  position: relative;
-  padding: 8px 0;
-  transition: color 0.2s ease;
-  display: inline-flex;
-  align-items: center;
   gap: 4px;
 }
 
+.ref-nav-pill-wrapper {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ref-nav-link {
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: #4A564D;
+  position: relative;
+  padding: 7px 12px;
+  border-radius: 9999px;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.ref-nav-link .nav-icon {
+  width: 15px;
+  height: 15px;
+  color: #5A675E;
+  transition: color 0.2s ease;
+  flex-shrink: 0;
+}
+
 .ref-nav-link:hover {
-  color: #C59958;
+  color: #162C1E;
+  background: rgba(255, 255, 255, 0.6);
 }
 
-/* Active Link Underline Indicator matching reference */
+.ref-nav-link:hover .nav-icon {
+  color: #162C1E;
+}
+
+/* Active Pill Link matching Image 2 */
 .ref-nav-link.active {
-  color: #C59958;
+  background: #FFFFFF;
+  color: #162C1E;
   font-weight: 600;
+  padding: 7px 16px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05),
+              0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
-.ref-nav-link.active::after {
-  content: '';
+.ref-nav-link.active .nav-icon {
+  color: #162C1E;
+}
+
+/* Active Green Indicator Dot centered underneath */
+.nav-active-dot {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: #C59958;
-  border-radius: 2px;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  background-color: #2D6A4F;
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 /* Dropdown */
@@ -349,83 +396,138 @@ textarea {
 .dropdown-chevron {
   transition: transform 0.2s ease;
   color: #6B7280;
+  margin-left: 2px;
 }
 
 .ref-nav-item.has-dropdown:hover .dropdown-chevron {
   transform: rotate(180deg);
-  color: #C59958;
+  color: #162C1E;
 }
 
 .ref-dropdown-menu {
   position: absolute;
-  top: 100%;
-  left: 0;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
   background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
-  border: 1px solid #F0EEEA;
-  padding: 8px 0;
-  min-width: 180px;
+  border-radius: 16px;
+  box-shadow: 0 14px 36px rgba(22, 38, 26, 0.12),
+              0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 8px 6px;
+  min-width: 170px;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(10px);
-  transition: all 0.25s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 100;
 }
 
 .ref-nav-item.has-dropdown:hover .ref-dropdown-menu {
   opacity: 1;
   visibility: visible;
-  transform: translateY(4px);
+  transform: translateX(-50%) translateY(0);
 }
 
 .ref-dropdown-item {
   display: block;
-  padding: 10px 18px;
-  font-size: 0.9rem;
+  padding: 8px 14px;
+  font-size: 0.86rem;
   font-weight: 500;
   color: #4B5563;
-  transition: all 0.2s ease;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  text-decoration: none;
 }
 
 .ref-dropdown-item:hover {
-  background: var(--c-green-tint);
-  color: var(--c-green-deep);
-  padding-left: 22px;
+  background: #F3F6F4;
+  color: #162C1E;
+  padding-left: 18px;
 }
 
-/* Header Actions: Contact & CTA */
+/* Header Actions: Phone & Get in Touch CTA */
 .ref-header-actions {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 14px;
   flex-shrink: 0;
 }
 
-.header-contact-meta {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.header-meta-link {
+.header-phone-link {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   font-family: var(--font-sans);
-  font-size: 0.88rem;
-  font-weight: 500;
-  color: #374151;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #2D3E33;
   text-decoration: none;
   transition: color 0.2s ease;
+  padding: 6px 8px;
+  border-radius: 9999px;
+  white-space: nowrap;
 }
 
-.header-meta-link:hover {
-  color: #C59958;
+.header-phone-link svg {
+  color: #2D3E33;
+  transition: transform 0.2s ease;
 }
 
-.header-meta-link svg {
-  color: #1A3B2B;
+.header-phone-link:hover {
+  color: #162C1E;
+}
+
+.header-phone-link:hover svg {
+  transform: scale(1.08);
+}
+
+/* Forest Green Get in Touch Pill Button with Circle Arrow Badge */
+.header-get-in-touch-btn {
+  background: linear-gradient(135deg, #183C28 0%, #12281B 100%);
+  color: #FFFFFF;
+  font-size: 0.86rem;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+  padding: 5px 6px 5px 18px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(22, 45, 30, 0.22);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+}
+
+.header-get-in-touch-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(22, 45, 30, 0.32);
+}
+
+.btn-circle-arrow {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.25s ease, background 0.25s ease;
+}
+
+.header-get-in-touch-btn:hover .btn-circle-arrow {
+  transform: translateX(2px) scale(1.04);
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.btn-circle-arrow svg {
+  color: #FFFFFF;
+}
+
+.header-mobile-enquire-btn {
+  display: none;
 }
 
 .header-enquire-btn {
@@ -2730,53 +2832,130 @@ body {
 }
 
 @media (max-width: 1024px) {
+  .ref-header {
+    position: sticky;
+    top: 10px;
+    z-index: 1000;
+    padding: 0 12px;
+    background: transparent;
+  }
+
   .ref-header-inner {
-    padding: 8px 12px;
-    height: 68px;
-    gap: 6px;
+    padding: 6px 8px 6px 10px;
+    min-height: 54px;
+    gap: 8px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.78);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  }
+
+  .ref-brand-block {
+    gap: 8px;
   }
 
   .ref-brand-logo-img {
-    height: 46px;
-    width: auto;
-    max-width: 180px;
-    object-fit: contain;
+    height: 38px;
+    width: 38px;
+    border-radius: 50%;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  }
+
+  .ref-brand-title {
+    font-size: 0.80rem;
+    font-weight: 800;
+    letter-spacing: -0.2px;
+    line-height: 1.1;
+  }
+
+  .ref-brand-subtitle {
+    font-size: 0.48rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #8C998E;
   }
 
   .ref-header-actions {
     gap: 8px;
     flex-shrink: 0;
-  }
-
-  .header-enquire-btn {
-    padding: 6px 10px;
-    font-size: 0.8rem;
-    border-radius: 8px;
-    white-space: nowrap;
+    display: flex;
+    align-items: center;
   }
 
   .ref-nav-menu,
+  .header-phone-link,
+  .header-get-in-touch-btn,
   .header-contact-meta {
     display: none !important;
   }
 
+  /* Golden Enquire Now Pill Button matching user mobile screenshot */
+  .header-mobile-enquire-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: linear-gradient(135deg, #DBB170 0%, #C4964F 100%);
+    color: #1B201C;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: -0.1px;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    border: none;
+    box-shadow: 0 2px 8px rgba(196, 150, 79, 0.28);
+    cursor: pointer;
+    white-space: nowrap;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .header-mobile-enquire-btn:hover {
+    background: linear-gradient(135deg, #E2B979 0%, #CD9F55 100%);
+    transform: translateY(-1px);
+  }
+
+  /* Circular Hamburger Toggle Button matching user mobile screenshot */
   .ref-mobile-toggle {
     display: flex !important;
     flex-direction: column;
-    justify-content: space-between;
-    width: 24px;
-    height: 18px;
+    align-items: center;
+    justify-content: center;
+    gap: 3.5px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
     flex-shrink: 0;
     cursor: pointer;
-    margin-left: 2px;
+    padding: 0;
+    margin: 0;
+    transition: all 0.2s ease;
   }
 
   .ref-mobile-toggle span {
     display: block;
-    height: 2.5px;
-    width: 100%;
-    background: var(--c-green-deep);
+    height: 2px;
+    width: 15px;
+    background: #162C1E;
     border-radius: 2px;
+    transition: all 0.25s ease;
+  }
+
+  .ref-mobile-toggle.active span:nth-child(1) {
+    transform: translateY(5.5px) rotate(45deg);
+  }
+
+  .ref-mobile-toggle.active span:nth-child(2) {
+    opacity: 0;
+  }
+
+  .ref-mobile-toggle.active span:nth-child(3) {
+    transform: translateY(-5.5px) rotate(-45deg);
   }
 
   /* Hero Split - Mobile Vertical Order: Content -> CTAs -> Benefits -> Image */

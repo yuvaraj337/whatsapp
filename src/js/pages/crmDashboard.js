@@ -436,11 +436,11 @@ function overview() {
         </div>
         <div class="crm-inventory-summary">
           ${[
-            ['available', i.available || 0],
-            ['hold', (i.hold || 0) + (i.reserved || 0)],
-            ['booked', i.booked || 0],
-            ['sold', i.sold || 0]
-          ].map((x) => `
+      ['available', i.available || 0],
+      ['hold', (i.hold || 0) + (i.reserved || 0)],
+      ['booked', i.booked || 0],
+      ['sold', i.sold || 0]
+    ].map((x) => `
             <div>
               <strong>${x[1]}</strong>
               <span>${label(x[0])}</span>
@@ -1116,8 +1116,8 @@ function renderInventoryTableView(rows) {
         </thead>
         <tbody>
           ${rows.map((p) => {
-            const b = p.active_booking;
-            return `
+    const b = p.active_booking;
+    return `
               <tr>
                 <td>
                   <b>${esc(p.property_code)}</b>
@@ -1144,7 +1144,7 @@ function renderInventoryTableView(rows) {
                 </td>
               </tr>
             `;
-          }).join('') || `<tr><td colspan="8"><div class="crm-empty">No inventory found.</div></td></tr>`}
+  }).join('') || `<tr><td colspan="8"><div class="crm-empty">No inventory found.</div></td></tr>`}
         </tbody>
       </table>
     </div>
@@ -1158,7 +1158,7 @@ function renderPlotDrawerHtml() {
   const status = p.inventory_status || 'AVAILABLE';
   const b = p.active_booking || S.bookings.find(
     (x) => (x.property_id === p.id || x.properties?.property_code === p.property_code) &&
-           (x.status === 'CONFIRMED' || x.status === 'COMPLETED' || x.status === 'BOOKED')
+      (x.status === 'CONFIRMED' || x.status === 'COMPLETED' || x.status === 'BOOKED')
   );
   const numericPrice = parseNumericPrice(p.price) || 3200000;
 
@@ -1971,14 +1971,14 @@ function openBookingModal({ mode = 'offline', enquiryId = null, visitId = null, 
   const modalTitle = mode === 'enquiry'
     ? `Book Property for ${esc(customerName || 'Customer')}`
     : mode === 'visit'
-    ? `Book Property from Site Visit`
-    : `+ Record Property Booking`;
+      ? `Book Property from Site Visit`
+      : `+ Record Property Booking`;
 
   const modalSubtitle = mode === 'enquiry'
     ? `Converts this website enquiry into a confirmed booking. Selected plot marks BOOKED and website updates instantly.`
     : mode === 'visit'
-    ? `Customer decided to purchase after site visit! Confirms booking, updates plot to BOOKED, and syncs website.`
-    : `Direct customer booking. Instantly updates inventory and synchronizes with the public master plan.`;
+      ? `Customer decided to purchase after site visit! Confirms booking, updates plot to BOOKED, and syncs website.`
+      : `Direct customer booking. Instantly updates inventory and synchronizes with the public master plan.`;
 
   modal(`
     <button class="crm-modal-close" data-close>×</button>
@@ -2512,8 +2512,8 @@ async function patchBooking(id, status) {
       status === 'COMPLETED'
         ? 'Booking marked COMPLETED and plot marked SOLD!'
         : status === 'CANCELLED'
-        ? 'Booking cancelled and plot released back to AVAILABLE.'
-        : 'Booking status updated.'
+          ? 'Booking cancelled and plot released back to AVAILABLE.'
+          : 'Booking status updated.'
     );
     await load();
     render();
