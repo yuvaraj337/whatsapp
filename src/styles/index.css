@@ -3229,9 +3229,10 @@ body {
     margin-top: 8px;
   }
 
-  /* Hero Section - smaller screen refinements */
+  /* Hero Section - smaller screen refinements with proper gap below floating navbar */
   .ref-hero-section {
-    padding: 12px 0 28px;
+    padding: 24px 0 28px;
+    margin-top: 14px;
   }
 
   .ref-hero-container {
