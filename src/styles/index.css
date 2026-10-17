@@ -2961,9 +2961,9 @@ body {
   /* Hero Split - Mobile Vertical Order: Content -> CTAs -> Benefits -> Image */
   /* Mobile Hero Styling matching Reference Image 3 */
   .ref-hero-section {
-    padding: 12px 0 24px;
+    padding: 24px 0 28px;
     min-height: auto;
-    margin-top: 0;
+    margin-top: 14px;
     position: relative;
   }
 
@@ -2981,8 +2981,17 @@ body {
   }
 
   .ref-hero-category {
-    margin-top: 0;
-    margin-bottom: 14px;
+    margin-top: 12px;
+    margin-bottom: 16px;
+  }
+
+  /* Spacing between floating navbar and Farmlands, Villas, Open Plots, Apartments on mobile */
+  .open-plots-page .open-plots-container,
+  .farmlands-journey-main,
+  .villas-journey-main,
+  .apt-journey-main {
+    margin-top: 16px !important;
+    padding-top: 14px !important;
   }
 
   .ref-hero-container {
